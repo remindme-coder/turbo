@@ -1,0 +1,21 @@
+# Logs
+logs
+**/**.log
+
+# Compiled binary
+**/*.OBJ
+**/*.BAK
+**/*.EXE
+**/*.LS
+**/*.DSK
+
+# Dependency directories
+**/data/**
+
+# dotenv environment variable files
+**/*.env
+**/*.env.*
+
+# vuepress v2.x temp and cache directory
+**/*.temp
+**/*.cache
