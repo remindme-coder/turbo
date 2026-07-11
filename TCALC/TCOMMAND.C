@@ -10,6 +10,7 @@
 #include "tcalc.h"
 
 char *name = MSGNAME;
+char sheetname[MAXINPUT] = "";
 
 void moverowup(void)
 /* Moves up 1 row */
@@ -123,8 +124,22 @@ void changeautocalc(int newmode)
   strcpy(s, MSGAUTOCALC);
  else
   s[0] = 0;
- writef(73, 1, MSGAUTOCALCCOLOR, strlen(MSGAUTOCALC), s);
+ //AutoCalc label Disabled for displaying Sheet Name
+ //writef(73, 1, MSGAUTOCALCCOLOR, strlen(MSGAUTOCALC), s);
 } /* autocalc */
+
+char* last8chars(char *buff){
+   char *p = (char*)buff;
+   int length = strlen(buff), i, tmplen;
+
+   if(length <= 8) return buff;
+   else {
+    p += (length - 8);
+   }
+   
+   return p;
+}
+
 
 void changeformdisplay(int newmode)
 /* Changes and prints the current formula display value on the screen */
@@ -138,6 +153,20 @@ void changeformdisplay(int newmode)
   s[0] = 0;
  writef(65, 1, MSGFORMDISPLAYCOLOR, strlen(MSGFORMDISPLAY), s);
 } /* autocalc */
+
+void changesheetname()
+/* Changes and prints the current spread sheet name on the screen */
+{
+  char s[15] = "", *p;
+ if( !sheetname || strlen(sheetname) == 0 )
+  writef(73, 1, MSGAUTOCALCCOLOR, 8, "");
+ else{
+  p = last8chars(sheetname);
+  strcpy(s, p);
+  writef(73, 1, MSGAUTOCALCCOLOR, strlen(s), s);
+ }
+  
+} /* sheet name */
 
 void editcell(CELLPTR ecell)
 /* Edits a selected cell */
@@ -180,18 +209,18 @@ void clearsheet(void)
  initvars();
  setrightcol();
  setbottomrow();
+ strcpy(sheetname, "");
  displayscreen(NOUPDATE);
  printfreemem();
  changed = FALSE;
 } /* clearsheet */
 
-struct CELLREC rec;
 
 void loadsheet(char *filename)
 /* Loads a new spreadsheet */
 {
- int size, allocated, reallastcol = 0, reallastrow = 0, file;
- char check[81];
+ int file;
+ char check[81], tempMSG[50];
 
  if (filename[0] == 0)
  {
@@ -201,24 +230,55 @@ void loadsheet(char *filename)
  }
  if (access(filename, 0))
  {
-  errormsg(MSGNOEXIST);
+  sprintf( tempMSG, MSGNOEXIST, filename );
+  errormsg( tempMSG );
   return;
  }
+ 
  if ((file = open(filename, O_RDWR | O_BINARY)) == -1)
  {
   errormsg(MSGNOOPEN);
   return;
  }
- read(file, check, strlen(name) + 1);
- if (strcmp(check, name) != 0)
- {
-  errormsg(MSGNOTURBOCALC);
+
+ if( strstr( strupr(filename), ".CSV" ) ){
   close(file);
-  return;
+  clearsheet();
+
+  loadcsvfile(filename);
+ } else {
+  // Check for Turbo file
+  read(file, check, strlen(name) + 1);
+  if (strcmp(check, name) != 0)
+  {
+   errormsg(MSGNOTURBOCALC);
+   close(file);
+   return;
+  }
+  writef(1, 25, PROMPTCOLOR, 79, MSGLOADING);
+  gotoxy(strlen(MSGLOADING) + 1, 25);
+  clearsheet();
+
+  loadturbofile(file);
+  close(file);
  }
- writef(1, 25, PROMPTCOLOR, 79, MSGLOADING);
- gotoxy(strlen(MSGLOADING) + 1, 25);
- clearsheet();
+
+ // sheet name  
+ strcpy(sheetname, filename);
+ 
+ writef(1, 25, WHITE, strlen(MSGLOADING), "");
+ gotoxy(1, 25);
+ printfreemem();
+ 
+ curcol = currow = 0;
+ setrightcol();
+ displayscreen(NOUPDATE);
+ changed = FALSE;
+} /* loadsheet */
+
+void loadturbofile(int file){
+ struct CELLREC rec;
+ int size, allocated, reallastcol = 0, reallastrow = 0;
  read(file, (char *)&size, 1);
  read(file, (char *)&lastcol, 2);
  read(file, (char *)&lastrow, 2);
@@ -262,40 +322,61 @@ void loadsheet(char *filename)
   }
  }
  while (TRUE);
- writef(1, 25, WHITE, strlen(MSGLOADING), "");
- gotoxy(1, 25);
- printfreemem();
- close(file);
- curcol = currow = 0;
- setrightcol();
- displayscreen(NOUPDATE);
- changed = FALSE;
-} /* loadsheet */
+}
 
 void savesheet(void)
 /* Saves the current spreadsheet */
 {
- char filename[MAXINPUT+1], eof = 26;
- int size, col, row, overwrite, file;
- CELLPTR cellptr;
+ char filename[MAXINPUT+1];
+ int overwrite, file, newfile = 0;
 
  filename[0] = 0;
- writeprompt(MSGFILENAME);
- if (!editstring(filename, "", MAXINPUT))
-  return;
- if (!access(filename, 0))
- {
-  if (!getyesno(&overwrite, MSGOVERWRITE) || (overwrite == 'N'))
+ if( !sheetname || strlen(sheetname) == 0 ) {
+  writeprompt(MSGFILENAME);
+  newfile = 1;
+  if (!editstring(filename, "", MAXINPUT))
    return;
+  if (!access(filename, 0))
+  {
+   if (!getyesno(&overwrite, MSGOVERWRITE) || (overwrite == 'N'))
+    return;
+  }
+  strcpy(sheetname , filename); 
+ } else {
+  strcpy(filename , sheetname); 
  }
+ 
  if ((file = open(filename, O_RDWR | O_CREAT | O_TRUNC | O_BINARY,
   S_IREAD | S_IWRITE)) == -1)
  {
-  errormsg(MSGNOOPEN);
+  if(newfile == 1)  errormsg(MSGNOCREATE);
+  else              errormsg(MSGNOOPEN);
   return;
  }
  writef(1, 25, PROMPTCOLOR, 79, MSGSAVING);
  gotoxy(strlen(MSGSAVING) + 1, 25);
+ 
+ if( strstr( strupr(filename), ".CSV" ) ){
+  close(file);
+  
+  savecsvfile(filename);
+ } else {
+  saveturbofile(file);
+  close(file);
+ }
+
+ successmsg(MSGSAVED);
+ gotoxy(1, 25);
+ clearinput();
+ changesheetname();
+ changed = FALSE;
+} /* savesheet */
+
+void saveturbofile(int file){
+ int size, col, row;
+ char eof = 26;
+ CELLPTR cellptr;
+ 
  write(file, name, strlen(name) + 1);
  write(file, &eof, 1);
  write(file, (char *)&lastcol, 2);
@@ -330,11 +411,7 @@ void savesheet(void)
    }
   }
  }
- close(file);
- writef(1, 25, WHITE, strlen(MSGSAVING), "");
- gotoxy(1, 25);
- changed = FALSE;
-} /* savesheet */
+}
 
 int pagerows(int row, int toppage, int border)
 /* Returns the number of rows to print */

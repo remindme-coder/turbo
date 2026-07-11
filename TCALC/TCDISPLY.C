@@ -172,6 +172,8 @@ void displayscreen(int updating)
  for (row = toprow; row <= bottomrow; row++)
   displayrow(row, updating);
  clearlastcol();
+
+ changesheetname();
 } /* displayscreen */
 
 void clearinput(void)

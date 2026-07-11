@@ -149,6 +149,18 @@ void errormsg(char *s)
  writef(1, 25, WHITE, 79, "");
 } /* errormsg */
 
+void successmsg(char *s)
+/* Prints a success message at the bottom of the screen */
+{
+ printf("%c", 7);      /* Beeps the speaker */
+ writef(1, 25, SUCCESSCOLOR, 79, "%s", s);
+ writef(1, 24, WHITE, 79, "");
+ gotoxy(strlen(s) + strlen(MSGKEYPRESS) + 3, 25);
+ getkey();
+ gotoxy(1, 25);
+ writef(1, 25, WHITE, 79, "");
+} /* successmsg */
+
 void fixformula(int col, int row, int action, int place)
 /* Modifies a formula when its column or row designations need to change. */
 {

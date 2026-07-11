@@ -6,7 +6,7 @@
 #define TRUE 1
 #define FALSE 0
 
-#define MSGHEADER "TURBOCALC - A Turbo C++ Demonstration Program"
+#define MSGHEADER "TURBOCALC - A Turbo C CSV Editor"
 #define MSGKEYPRESS "Press any key to continue."
 #define MSGCOMMAND "Press / for the list of commands"
 #define MSGMEMORY "Memory Available:"
@@ -22,10 +22,11 @@
 #define MSGNAME "Turbo C++ TurboCalc Spreadsheet"
 #define MSGCOLWIDTH "Enter the new column width:"
 #define MSGNOOPEN "Can't open the file."
+#define MSGNOCREATE "Can't create the file, in the directory!"
 #define MSGOVERWRITE "The file exists.  Do you want to overwrite it?"
 #define MSGFILELOMEM "Not enough memory for entire spreadsheet."
 #define MSGNOTURBOCALC "That is not a Turbo C++ TurboCalc spreadsheet."
-#define MSGNOEXIST "The file does not exist."
+#define MSGNOEXIST "The file %s, does not exist."
 #define MSGGOTO "Enter the cell to go to:"
 #define MSGBADNUMBER "You must enter a number from %d to %d."
 #define MSGBADCELL "That is not a legal cell."
@@ -41,10 +42,11 @@
 #define MSGBORDER "Print the border?"
 #define MSGLOADING "Loading..."
 #define MSGSAVING "Saving..."
+#define MSGSAVED "The file is saved successfully!"
 #define MSGSAVESHEET "Save current spreadsheet?"
 #define MSGSTACKERROR "Parser stack overflow."
 
-#define MENU "Spreadsheet, Format, Delete, Goto, Col, Row, Edit, Utility, Auto, Quit"
+#define MENU "Spreadsheet, Format, Delete, Goto, Col, Row, Edit, Utility, Quit"
 #define COMMAND "SFDGCREUAQ"
 #define SMENU "Load, Save, Print, Clear"
 #define SCOMMAND "LSPC"
@@ -68,8 +70,12 @@
 #define MAXPLACES 8
 #define TOPMARGIN 5
 #define PARSERSTACKSIZE 20
+#define MEMPIT 50  /* Trailing space allocation */
+#define MAXROWCHARS 500
+#define MAXVALCHARS 50
 
 #define TEXTCOLOR WHITE
+#define SUCCESSCOLOR LIGHTGREEN + BLINK
 #define ERRORCOLOR LIGHTRED + BLINK
 #define VALUECOLOR LIGHTCYAN
 #define FORMULACOLOR LIGHTMAGENTA
@@ -203,7 +209,9 @@ void movecolright(void);
 void recalc(void);
 void changeautocalc(int newmode);
 void changeformdisplay(int newmode);
+void changesheetname();
 void errormsg(char *s);
+void successmsg(char *s);
 void colstring(int col, char *colstr);
 void centercolstring(int col, char *colstr);
 void setleftcol(void);
@@ -236,6 +244,13 @@ void fixformula(int col, int row, int action, int place);
 void clearlastcol(void);
 void run(void);
 void gotocell(void);
+
+char* readentire(char* fileName);
+void loadcsvfile(char* fileName);
+void savecsvfile(char* fileName);
+char finddelimiter();
+void loadturbofile(int file);
+void saveturbofile(int file);
 
 #if !defined(MAIN)
 
