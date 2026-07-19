@@ -473,10 +473,12 @@ void valuestring(CELLPTR cellptr, double value, char *vstring, int col,
  {
   if (formatting)
   {
-   sprintf(vstring, "%1.*f", fvalue & 15, cellptr->v.value);
+   //sprintf(vstring, "%1.*f", fvalue & 15, cellptr->v.value);
+   strcpy(vstring, doubletostr(cellptr->v.value));
+   trimdecimals(vstring);
    if (fvalue & COMMAS)
    {
-    pos = strcspn(vstring, ".");
+    pos = strlen(vstring);
     while (pos > 3)
     {
      pos -= 3;
@@ -519,7 +521,7 @@ void valuestring(CELLPTR cellptr, double value, char *vstring, int col,
    strncpy(vstring, fstring, strlen(fstring));
   }
   else
-   sprintf(vstring, "%.*f", MAXPLACES, value);
+   strcpy(vstring, doubletostr(value));// MAXPLACES format removed
   *color = VALUECOLOR;
  }
 } /* valuestring */
@@ -599,6 +601,54 @@ void swap(int *val1, int *val2)
  *val2 = temp;
 } /* swap */
 
+char* trimdecimals(char *buff){
+  char *pos;
+  int length;
+  pos = strchr(buff,'.');
+  if(pos) {
+   length = strlen(buff);
+   while(buff[length-1] != '.') {  buff[length-1] = '\0'; length--;  }
+   buff[length-1] = '\0';
+  }
+  return buff;
+}
+char* trim(char *buff){
+  char *pos;
+  int length, i = 0;
+
+  if(!buff || strlen(buff) == 0) return buff;
+
+  // Start from reverse
+  i = strlen(buff) - 1;
+  while( i>=0 && buff[i] == ' ') {  buff[i] = '\0'; i--;  }
+
+  // start forward
+  length = strlen(buff);
+  i = 0;
+  while( i<length && buff[i] == ' ' ) { i++;  }
+  movmem(&buff[i], &buff[0], length );
+
+  return buff;
+}
+char* doubletostr(double fv){
+  double down, up;
+  char s[25], *tmp;
+
+  down = floor(fv);
+  up = ceil(fv);
+
+  if(down < up) sprintf(s,"%1.2lf",fv); // decimal places exists
+  else 		sprintf(s,"%1.0lf",down);// decimal places not present
+
+  //The following is required only for complex string operations
+  //tmp = (char*)malloc(25);
+  //strcpy(tmp,s);
+  //return tmp;
+
+  return s;
+}
+
+
 void checkforsave(void)
 /* If the spreadsheet has been changed, will ask the user if they want to
    save it.
@@ -638,5 +688,46 @@ int getcommand(char *msgstr, char *comstr)
  clearinput();
  return((ch == ESC) ? -1 : strlen(comstr) - strlen(strchr(comstr, ch)));
 } /* getcommand */
+
+void trace(char* info){
+  char datatemp[79];
+  if(info == NULL) strcpy(diagdata, "");
+  else {
+    if( (strlen(diagdata) + strlen(info)) > MAXDIAGCHARS ) 
+      return; // cannot add trace anymore
+    strcpy( datatemp,  info);
+    strcat( diagdata, "\n");
+    strcat( diagdata, datatemp) ;
+  }
+}
+
+void diagnostics(void)
+{
+ int ch;char *ptr;
+ 
+ writef(1, 24, LOWCOMMANDCOLOR, 79, "leftcol:%d , rightcol:%d, toprow:%d, bottomrow:%d",
+  leftcol , rightcol, toprow, bottomrow );
+ ch = toupper(getkey());
+
+ if(ch != ESC){
+  writef(1, 24, LOWCOMMANDCOLOR, 79, "curcol:%d, currow:%d, lastcol:%d, lastrow:%d",
+   curcol, currow, lastcol, lastrow );
+  ch = toupper(getkey());
+
+  if(ch != ESC){
+   // Display the data added for diagnostics
+   ptr = strtok(diagdata, "\n");
+   
+   while (ptr != NULL && ch != ESC) {
+      writef(1, 24, LOWCOMMANDCOLOR, 79, ptr );
+      ptr = strtok(NULL, "\n");
+      ch = toupper(getkey());
+   }
+   free(ptr);
+  }
+ }
+
+ clearinput();
+} /* diagnostics */
 
 

@@ -13,6 +13,7 @@ CELLPTR cell[MAXCOLS][MAXROWS], curcell;
 unsigned char format[MAXCOLS][MAXROWS];
 unsigned char colwidth[MAXCOLS];
 unsigned char colstart[SCREENCOLS];
+unsigned char diagdata[MAXDIAGCHARS];
 int leftcol, rightcol, toprow, bottomrow, curcol, currow, lastcol, lastrow;
 char changed = FALSE;
 char formdisplay = FALSE;

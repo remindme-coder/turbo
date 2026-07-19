@@ -29,6 +29,8 @@ int attribtype(char* data) {
    char *loc;
    int i=0, type = VALUE;
 
+   if(!data || strlen(data) == 0) return TEXT;
+
    // Check if the type is not numeric
    for( i=0; i<strlen(data); i++ ){
     if(strchr(nmbers, data[i]) == NULL) {
@@ -53,7 +55,38 @@ int trimzeros(char *buff){
    return -1;
 }
 
-char finddelimiter(char *sheetheader){
+/* strtok method requires delimitors separated by space, so add gaps */
+void insertspace(char *vstring){
+  int pos, found = 0, foundtwice = 0;
+  char debug[25];
+  if(!vstring || strlen(vstring) == 0) return;
+
+  pos = strlen(vstring);
+  while (pos > 0)
+  {
+   pos -= 1;
+   if (vstring[pos] == delimiter){
+    if(found == 1) foundtwice = 1;
+    else found = 1;
+   }
+   else found = 0;
+
+   if (foundtwice == 1) {
+    movmem(&vstring[pos+1], &vstring[pos+2], strlen(vstring) - pos + 1);
+    vstring[pos+1] = ' ';
+    foundtwice = 0;
+   }
+  }
+  // First column
+  if (found == 1) {
+   movmem(&vstring[pos], &vstring[pos+1], strlen(vstring) -pos + 1);
+   vstring[pos] = ' ';
+  }
+  //sprintf(debug, "found:%d,Pos:%d", found, pos );
+  //trace(debug);
+}
+
+char finddelimiter(char *sheetheader, int *count){
    int length = strlen(sheetheader), tmplen=0, tmpcount=0, delimcount=0, i;
    char delim = delimitchars[0];
    for( i=0; i<strlen(delimitchars); i++ ){
@@ -65,6 +98,7 @@ char finddelimiter(char *sheetheader){
       }
       if(delimcount < tmpcount){
          delimcount = tmpcount;
+         *count = tmpcount;
          delim = delimitchars[i];
       } 
    }
@@ -90,30 +124,35 @@ char* readentire(char* fileName){
 }
 
 void loadcsvfile(char* fileName){
-   int i=0, j=0, maxI=0, maxJ=0, allocated, dummy;
+   int i=0, j=0, maxI=0, maxJ=0, allocated, delimcount,dummy;
    struct CELLREC rec;
    char* doc = readentire(fileName);
-   char *ptr,*temp, nLine[2] = "\n", delim[2] = ";";
+   char *ptr,*temp, nLine[2] = "\n", delim[2] = ";", debug[25];
    char* recs[MAXROWS];
 
    // If the doc contains no data
    if(!doc || strlen(doc) == 0) return;
-
+   
    // Split Row-wise starting from header
    ptr = strtok(doc, nLine);
+   trace(NULL);
 
-   recs[0] = (char*)malloc( strlen(ptr) + MEMPIT );
+   // Identify the delimiter from the sheet header
+   delimiter = finddelimiter(ptr, &delimcount);
+   sprintf(debug, "column count : %d", delimcount);
+   trace(debug);
+   strset(delim, delimiter);
+
+   recs[0] = (char*)malloc( strlen(ptr) + delimcount + MEMPIT );
    strcpy(recs[0], ptr);
+   insertspace(recs[0]);
    ptr = strtok(NULL, nLine);
    i++;
    
-   // Identify the delimiter from the sheet header
-   delimiter = finddelimiter(recs[0]);
-   strset(delim, delimiter);
-
    while (ptr != NULL) {
-      recs[i] = (char*)malloc( strlen(ptr) + MEMPIT );
+      recs[i] = (char*)malloc( strlen(ptr) + delimcount + MEMPIT );
       strcpy(recs[i], ptr);
+      insertspace(recs[i]);
       ptr = strtok(NULL, nLine);
       i++;
 
@@ -126,6 +165,7 @@ void loadcsvfile(char* fileName){
       j=0;
       temp = recs[i];
       temp = strtok(temp, delim);
+      temp = trim(temp);
       currow = i;
 
       do{
@@ -200,19 +240,14 @@ void savecsvfile(char* fileName)
     {
      switch(cellptr->attrib)
      {
-      case TEXT :     strcat(record, (cellptr->v.text == "" ? " ": cellptr->v.text));      break;
+      case TEXT :     strcat(record, cellptr->v.text);      break;
       case VALUE :
-        sprintf(valBuff,"%3.2lf", cellptr->v.value);
-        trimzeros(valBuff);
+        strcpy(valBuff, doubletostr(cellptr->v.value));
         strcat(record, valBuff);
         break;
       case FORMULA :  strcat(record, cellptr->v.f.formula);      break;
-      default : strcat(record, " ");
+      default : break;
      }
-    }
-    else
-    {
-     strcat(record, " ");
     }
     if(col < cols) strcat(record, delim);
    }

@@ -46,16 +46,18 @@
 #define MSGSAVESHEET "Save current spreadsheet?"
 #define MSGSTACKERROR "Parser stack overflow."
 
-#define MENU "Spreadsheet, Format, Delete, Goto, Col, Row, Edit, Utility, Quit"
-#define COMMAND "SFDGCREUAQ"
+#define MENU "Spreadsheet, Col, Row, Utility, Quit"
+#define COMMAND "SCRUQ"
 #define SMENU "Load, Save, Print, Clear"
 #define SCOMMAND "LSPC"
-#define CMENU "Insert, Delete, Width"
-#define CCOMMAND "IDW"
+#define FMENU "Money, Justify-left, Clear"
+#define FCOMMAND "MJC"
+#define CMENU "Insert, Delete, Width, Format"
+#define CCOMMAND "IDWF"
 #define RMENU "Insert, Delete"
 #define RCOMMAND "ID"
-#define UMENU "Recalc, Formula display"
-#define UCOMMAND "RF"
+#define UMENU "Recalc, Formula display, Diagnostics"
+#define UCOMMAND "RFD"
 
 #define MAXCOLS 100   /* Maximum is 702 */
 #define MAXROWS 100
@@ -72,6 +74,7 @@
 #define PARSERSTACKSIZE 20
 #define MEMPIT 50  /* Trailing space allocation */
 #define MAXROWCHARS 500
+#define MAXDIAGCHARS 500
 #define MAXVALCHARS 50
 
 #define TEXTCOLOR WHITE
@@ -244,13 +247,19 @@ void fixformula(int col, int row, int action, int place);
 void clearlastcol(void);
 void run(void);
 void gotocell(void);
+void trace(char* info);
+void diagnostics(void);
 
 char* readentire(char* fileName);
 void loadcsvfile(char* fileName);
 void savecsvfile(char* fileName);
-char finddelimiter();
+char finddelimiter(char *sheetheader, int *count);
 void loadturbofile(int file);
 void saveturbofile(int file);
+
+char* trimdecimals(char *buff);
+char* trim(char *buff);
+char* doubletostr(double fv);
 
 #if !defined(MAIN)
 
@@ -258,6 +267,7 @@ extern CELLPTR cell[MAXCOLS][MAXROWS], curcell;
 extern unsigned char format[MAXCOLS][MAXROWS];
 extern unsigned char colwidth[MAXCOLS];
 extern unsigned char colstart[SCREENCOLS];
+extern unsigned char diagdata[MAXROWCHARS];
 extern char formdisplay;
 extern char changed;
 extern char autocalc;

@@ -184,7 +184,7 @@ void editcell(CELLPTR ecell)
    if (ecell->v.value == HUGE_VAL)
     strcpy(s, "0");
    else
-    sprintf(s, "%.*f", MAXPLACES, ecell->v.value);
+    strcpy(s, doubletostr(ecell->v.value));// MAXPLACES format removed
    break;
   case FORMULA :
    strcpy(s, ecell->v.f.formula);
@@ -569,52 +569,33 @@ void gotocell()
  displayscreen(NOUPDATE);
 } /* gotocell */
 
-void formatcells(void)
+void formatcells(int type)
 /* Prompts the user for a selected format and range of cells */
 {
- int col, row, col1, col2, row1, row2, temp, newformat = 0;
+ int col, row, col1, col2, row1, row2, newformat = 0;
 
- writeprompt(MSGCELL1);
- if (!getcell(&col1, &row1))
-  return;
- writeprompt(MSGCELL2);
- if (!getcell(&col2, &row2))
-  return;
- if ((col1 != col2) && (row1 != row2))
-  errormsg(MSGDIFFCOLROW);
- else
- {
-  if (col1 > col2)
-   swap(&col1, &col2);
-  if (row1 > row2)
-   swap(&row1, &row2);
-  if (!getyesno(&temp, MSGRIGHTJUST))
-   return;
-  newformat += (temp == 'Y') * RJUSTIFY;
-  if (!getyesno(&temp, MSGDOLLAR))
-   return;
-  newformat += (temp == 'Y') * DOLLAR;
-  if (!getyesno(&temp, MSGCOMMAS))
-   return;
-  newformat += (temp == 'Y') * COMMAS;
-  if (newformat & DOLLAR)
+ col1 = col2 = curcol;
+ row1 = 1;
+ row2 = MAXROWS-1;
+
+ if ( type == 0 ) {
+   newformat += DOLLAR;
+   newformat += RJUSTIFY;
+   newformat += COMMAS;
    newformat += 2;
-  else
+ } else if ( type == 1 ) {
+   newformat = 0;
+ } else if ( type == 2 ) {
+   newformat = RJUSTIFY;
+ }
+ for (col = col1; col <= col2; col++)
+ {
+  for (row = row1; row <= row2; row++)
   {
-   writeprompt(MSGPLACES);
-   if (!getint(&temp, 0, MAXPLACES))
-    return;
-   newformat += temp;
-  }
-  for (col = col1; col <= col2; col++)
-  {
-   for (row = row1; row <= row2; row++)
-   {
-    format[col][row] = (format[col][row] & OVERWRITE) | newformat;
-    if ((col >= leftcol) && (col <= rightcol) &&
-     (row >= toprow) && (row <= bottomrow))
-     displaycell(col, row, NOHIGHLIGHT, NOUPDATE);
-   }
+   format[col][row] = (format[col][row] & OVERWRITE) | newformat;
+   if ((col >= leftcol) && (col <= rightcol) &&
+    (row >= toprow) && (row <= bottomrow))
+    displaycell(col, row, NOHIGHLIGHT, NOUPDATE);
   }
  }
  changed = TRUE;
@@ -817,6 +798,26 @@ void smenu(void)
  } /* switch */
 } /* smenu */
 
+void fmenu(void)
+/* Executes the commands in the spreadsheet menu */
+{
+ char filename[MAXINPUT + 1];
+
+ filename[0] = 0;
+ switch(getcommand(FMENU, FCOMMAND))
+ {
+  case 0 :
+   formatcells(0);
+   break;
+  case 1 :
+   formatcells(1);
+   break;
+  case 2 :
+   formatcells(2);
+   break;
+ } /* switch */
+} /* fmenu */
+
 void cmenu(void)
 /* Executes the commands in the column menu */
 {
@@ -830,6 +831,9 @@ void cmenu(void)
    break;
   case 2 :
    setcolwidth(curcol);
+   break;
+  case 3 :
+   fmenu();
    break;
  } /* switch */
 } /* cmenu */
@@ -860,6 +864,9 @@ void umenu(void)
    changeformdisplay(!formdisplay);
    displayscreen(UPDATE);
    break;
+  case 2 :
+   diagnostics();
+   break;
  } /* switch */
 } /* umenu */
 
@@ -872,33 +879,15 @@ void mainmenu(void)
    smenu();
    break;
   case 1 :
-   formatcells();
-   break;
-  case 2 :
-   deletecell(curcol, currow, UPDATE);
-   printfreemem();
-   if (autocalc)
-    recalc();
-   break;
-  case 3 :
-   gotocell();
-   break;
-  case 4 :
    cmenu();
    break;
-  case 5 :
+  case 2 :
    rmenu();
    break;
-  case 6 :
-   editcell(curcell);
-   break;
-  case 7 :
+  case 3 :
    umenu();
    break;
-  case 8 :
-   changeautocalc(!autocalc);
-   break;
-  case 9 :
+  case 4 :
    checkforsave();
    stop = TRUE;
    break;
