@@ -264,10 +264,10 @@ char* doubletostr(double fv);
 #if !defined(MAIN)
 
 extern CELLPTR cell[MAXCOLS][MAXROWS], curcell;
-extern unsigned char format[MAXCOLS][MAXROWS];
+extern unsigned char format[MAXCOLS];
 extern unsigned char colwidth[MAXCOLS];
 extern unsigned char colstart[SCREENCOLS];
-extern unsigned char diagdata[MAXROWCHARS];
+extern unsigned char diagdata[MAXDIAGCHARS];
 extern char formdisplay;
 extern char changed;
 extern char autocalc;

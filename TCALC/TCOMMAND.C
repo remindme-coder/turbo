@@ -289,7 +289,7 @@ void loadturbofile(int file){
   if (read(file, (char *)&curcol, 2) <= 0)
    break;
   read(file, (char *)&currow, 2);
-  read(file, &format[curcol][currow], 1);
+  if(currow == 0) read(file, &format[curcol], 1);
   read(file, (char *)&size, 2);
   read(file, (char *)&rec, size);
   switch (rec.attrib)
@@ -310,7 +310,7 @@ void loadturbofile(int file){
    errormsg(MSGFILELOMEM);
    lastrow = reallastrow;
    lastcol = reallastcol;
-   format[curcol][currow] = DEFAULTFORMAT;
+   if(currow == 0) format[curcol] = DEFAULTFORMAT;
    break;
   }
   else
@@ -405,7 +405,7 @@ void saveturbofile(int file){
     } /* switch */
     write(file, (char *)&col, 2);
     write(file, (char *)&row, 2);
-    write(file, (char *)&format[col][row], 1);
+    if(row==0)write(file, (char *)&format[col], 1);
     write(file, (char *)&size, 2);
     write(file, (char *)cellptr, size);
    }
@@ -460,13 +460,10 @@ void printsheet(void)
   return;
  }
  oldlastcol = lastcol;
- for (counter1 = 0; counter1 <= lastrow; counter1++)
+ for (counter2 = lastcol; counter2 < MAXCOLS; counter2++)
  {
-  for (counter2 = lastcol; counter2 < MAXCOLS; counter2++)
-  {
-   if (format[counter2][counter1] >= OVERWRITE)
-    lastcol = counter2;
-  }
+  if (format[counter2] >= OVERWRITE)
+   lastcol = counter2;
  }
  if (!getyesno(&columns, MSGCOLUMNS))
   return;
@@ -575,7 +572,7 @@ void formatcells(int type)
  int col, row, col1, col2, row1, row2, newformat = 0;
 
  col1 = col2 = curcol;
- row1 = 1;
+ row1 = 0;
  row2 = MAXROWS-1;
 
  if ( type == 0 ) {
@@ -588,11 +585,16 @@ void formatcells(int type)
  } else if ( type == 2 ) {
    newformat = RJUSTIFY;
  }
+ //header
+ for (col = col1; col <= col2; col++)
+ {
+  format[col] = (format[col] & OVERWRITE) | newformat;
+ }
+ //data
  for (col = col1; col <= col2; col++)
  {
   for (row = row1; row <= row2; row++)
   {
-   format[col][row] = (format[col][row] & OVERWRITE) | newformat;
    if ((col >= leftcol) && (col <= rightcol) &&
     (row >= toprow) && (row <= bottomrow))
     displaycell(col, row, NOHIGHLIGHT, NOUPDATE);
@@ -613,11 +615,11 @@ void deletecol(int col)
  {
   movmem(&cell[col + 1][0], &cell[col][0], MAXROWS * sizeof(CELLPTR) *
    (MAXCOLS - col - 1));
-  movmem(&format[col + 1][0], &format[col][0], MAXROWS * (MAXCOLS - col - 1));
+  movmem(&format[col + 1], &format[col], (MAXCOLS - col - 1));
   movmem(&colwidth[col + 1], &colwidth[col], MAXCOLS - col - 1);
  }
  setmem(&cell[MAXCOLS - 1][0], MAXROWS * sizeof(CELLPTR), 0);
- setmem(&format[MAXCOLS - 1][0], MAXROWS, DEFAULTFORMAT);
+ setmem(&format[MAXCOLS - 1], 1, DEFAULTFORMAT);
  colwidth[MAXCOLS - 1] = DEFAULTWIDTH;
  if ((lastcol >= col) && (lastcol > 0))
   lastcol--;
@@ -659,11 +661,11 @@ void insertcol(int col)
  {
   movmem(&cell[col][0], &cell[col + 1][0], MAXROWS * sizeof(CELLPTR) *
    (MAXCOLS - col - 1));
-  movmem(&format[col][0], &format[col + 1][0], MAXROWS * (MAXCOLS - col - 1));
+  movmem(&format[col], &format[col + 1], (MAXCOLS - col - 1));
   movmem(&colwidth[col], &colwidth[col + 1], MAXCOLS - col - 1);
  }
  setmem(&cell[col][0], MAXROWS * sizeof(CELLPTR), 0);
- setmem(&format[col][0], MAXROWS, DEFAULTFORMAT);
+ setmem(&format[col], 1, DEFAULTFORMAT);
  colwidth[col] = DEFAULTWIDTH;
  lastcol = MAXCOLS - 1;
  setlastcol();
@@ -703,7 +705,7 @@ void deleterow(int row)
   {
    movmem(&cell[counter][row + 1], &cell[counter][row],
     sizeof(CELLPTR) * (MAXROWS - row - 1));
-   movmem(&format[counter][row + 1], &format[counter][row], MAXROWS - row - 1);
+   //movmem(&format[counter][row + 1], &format[counter][row], MAXROWS - row - 1);
   }
  }
  else
@@ -711,7 +713,7 @@ void deleterow(int row)
   for (counter = 0; counter <= lastcol; counter++)
   {
    cell[counter][MAXROWS - 1] = NULL;
-   format[counter][MAXROWS - 1] = DEFAULTFORMAT;
+   //format[counter][MAXROWS - 1] = DEFAULTFORMAT;
   }
  }
  if ((lastrow >= row) && (lastrow > 0))
@@ -748,13 +750,13 @@ void insertrow(int row)
   {
    movmem(&cell[counter][row], &cell[counter][row + 1],
     sizeof(CELLPTR) * (MAXROWS - row - 1));
-   movmem(&format[counter][row], &format[counter][row + 1], MAXROWS - row - 1);
+   //movmem(&format[counter][row], &format[counter][row + 1], MAXROWS - row - 1);
   }
  }
  for (counter = 0; counter < MAXCOLS; counter++)
  {
   cell[counter][row] = NULL;
-  format[counter][row] = DEFAULTFORMAT;
+  //format[counter][row] = DEFAULTFORMAT;
  }
  lastrow = MAXROWS - 1;
  setlastrow();

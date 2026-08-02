@@ -78,7 +78,7 @@ void deletecell(int col, int row, int display)
    memleft += formulacellsize(cellptr->v.f.formula);
    break;
  } /* switch */
- format[col][row] &= ~OVERWRITE;
+ if(row == 0) format[col] &= ~OVERWRITE;
  free(cell[col][row]);
  cell[col][row] = NULL;
  if (col == lastcol)
@@ -385,7 +385,7 @@ void act(char *s)
  } /* switch */
  if (allocated)
  {
-  format[curcol][currow] &= ~OVERWRITE;
+  if(currow==0)format[curcol] &= ~OVERWRITE;
   clearoflags(curcol + 1, currow, UPDATE);
   if (attrib == TEXT)
     setoflags(curcol, currow, UPDATE);
@@ -411,7 +411,7 @@ int setoflags(int col, int row, int display)
  len = strlen(cell[col][row]->v.text) - colwidth[col];
  while ((++col < MAXCOLS) && (len > 0) && (cell[col][row] == NULL))
  {
-  format[col][row] |= OVERWRITE;
+  if(row==0)format[col] |= OVERWRITE;
   len -= colwidth[col];
   if (display && (col >= leftcol) && (col <= rightcol))
    displaycell(col, row, NOHIGHLIGHT, NOUPDATE);
@@ -422,10 +422,10 @@ int setoflags(int col, int row, int display)
 void clearoflags(int col, int row, int display)
 /* Clears the overwrite flag on cells starting at (col, row) */
 {
- while ((format[col][row] >= OVERWRITE) && (col < MAXCOLS) &&
-        (cell[col][row] == NULL))
+ while ((format[col] >= OVERWRITE) && (col < MAXCOLS) &&
+        (cell[col] == NULL))
  {
-  format[col][row] &= ~OVERWRITE;
+  if(row==0)format[col] &= ~OVERWRITE;
   if (display && (col >= leftcol) && (col <= rightcol))
    displaycell(col, row, NOHIGHLIGHT, NOUPDATE);
   col++;
@@ -538,7 +538,7 @@ char *cellstring(int col, int row, int *color, int formatting)
 
  if (cellptr == NULL)
  {
-  if (!formatting || (format[col][row] < OVERWRITE))
+  if (!formatting || (format[col] < OVERWRITE))
   {
    sprintf(s, "%*s", colwidth[col], "");
    *color = BLANKCOLOR;
@@ -558,7 +558,7 @@ char *cellstring(int col, int row, int *color, int formatting)
  }
  else
  {
-  formatvalue = format[col][row];
+  formatvalue = format[col];
   switch (cellptr->attrib)
   {
    case TEXT :
@@ -703,7 +703,7 @@ void trace(char* info){
 
 void diagnostics(void)
 {
- int ch;char *ptr;
+ int ch;char *ptr, diagCopy[MAXDIAGCHARS];
  
  writef(1, 24, LOWCOMMANDCOLOR, 79, "leftcol:%d , rightcol:%d, toprow:%d, bottomrow:%d",
   leftcol , rightcol, toprow, bottomrow );
@@ -716,7 +716,8 @@ void diagnostics(void)
 
   if(ch != ESC){
    // Display the data added for diagnostics
-   ptr = strtok(diagdata, "\n");
+   strcpy(diagCopy, diagdata);
+   ptr = strtok(diagCopy, "\n");
    
    while (ptr != NULL && ch != ESC) {
       writef(1, 24, LOWCOMMANDCOLOR, 79, ptr );

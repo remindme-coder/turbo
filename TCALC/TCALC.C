@@ -10,7 +10,7 @@
 #include "tcalc.h"
 
 CELLPTR cell[MAXCOLS][MAXROWS], curcell;
-unsigned char format[MAXCOLS][MAXROWS];
+unsigned char format[MAXCOLS];
 unsigned char colwidth[MAXCOLS];
 unsigned char colstart[SCREENCOLS];
 unsigned char diagdata[MAXDIAGCHARS];

@@ -87,14 +87,21 @@ void insertspace(char *vstring){
 }
 
 char finddelimiter(char *sheetheader, int *count){
-   int length = strlen(sheetheader), tmplen=0, tmpcount=0, delimcount=0, i;
+   int length = strlen(sheetheader), tmplen=0, tmpcount=0, delimcount=0, i, skip = 0;
    char delim = delimitchars[0];
    for( i=0; i<strlen(delimitchars); i++ ){
       tmplen = length;
       tmpcount = 0;
       while(tmplen>-1) {  
-         if( sheetheader[tmplen-1] == delimitchars[i] ) tmpcount++; 
          tmplen--;  
+         /* format information arent considered */
+         if( sheetheader[tmplen] == '}' ) skip = 1;
+         if( skip == 1 ) {
+            if( sheetheader[tmplen] == '{') skip = 0;
+            continue;
+         }
+
+         if( sheetheader[tmplen] == delimitchars[i] ) tmpcount++; 
       }
       if(delimcount < tmpcount){
          delimcount = tmpcount;
@@ -104,6 +111,61 @@ char finddelimiter(char *sheetheader, int *count){
    }
    
    return delim;
+}
+
+void findcolumformat(char *sheetheader){
+   int length = strlen(sheetheader), colinx=0, i, scrptinx = 0, skip = 0, scrptlen, proplen;
+   char fmt[25] = "",wdth[15], *pos1, *pos2;
+   trace(NULL);
+   
+   i = 0;
+   format[colinx] = DEFAULTFORMAT;
+   while(i < length) {  
+      /* format information only considered */
+      if( sheetheader[i] == '{' ) { 
+         skip = 1;
+         scrptinx = i;
+      }
+      if( skip == 1 ) {
+         if( sheetheader[i] == '}') {
+            skip = 0;
+            scrptlen = i+1 - scrptinx;
+            memcpy( fmt, (sheetheader + scrptinx), scrptlen );
+            fmt[scrptlen] = '\0';
+            
+            if( strstr( fmt, "f:$" ) )       format[colinx] += (DOLLAR + COMMAS);
+            else if( strstr( fmt, "f:L" ) )  format[colinx] = 0;
+            else if( strstr( fmt, "f:R" ) )  format[colinx] += RJUSTIFY;
+            else if( strstr( fmt, "f:C" ) )  format[colinx] += COMMAS;
+
+            if( strstr( fmt, "w:" ) ) {
+               pos1 = strstr( fmt, "w:" ) + 2;
+               if( strchr(pos1,',') )        pos2 = strchr(pos1,',');
+               else if ( strchr(pos1,'}') )  pos2 = strchr(pos1,'}');
+               proplen = pos2 - pos1;
+
+               memcpy( wdth, pos1, proplen );
+               wdth[proplen] = '\0';// eliminate rest
+
+               colwidth[colinx] = atoi(wdth);// column width identified
+            }
+
+            movmem((sheetheader+i+1), (sheetheader+scrptinx), length - i - 1);
+            length = length - scrptlen;
+            i = i - scrptlen;
+
+            sheetheader[length] = '\0';// eliminate rest
+            //sprintf(fmt, "%d,%d", colinx, colwidth[colinx]);
+            //trace( fmt );
+         }
+      }
+
+      if( sheetheader[i] == delimiter ) {
+         colinx++; 
+         format[colinx] = DEFAULTFORMAT;
+      }
+      i++;
+   }
 }
 
 char* readentire(char* fileName){
@@ -135,12 +197,13 @@ void loadcsvfile(char* fileName){
    
    // Split Row-wise starting from header
    ptr = strtok(doc, nLine);
-   trace(NULL);
+   //trace(NULL);
 
    // Identify the delimiter from the sheet header
    delimiter = finddelimiter(ptr, &delimcount);
-   sprintf(debug, "column count : %d", delimcount);
-   trace(debug);
+   findcolumformat(ptr);
+   sprintf(debug, "column count : %d", delimcount+1);
+   //trace(debug);
    strset(delim, delimiter);
 
    recs[0] = (char*)malloc( strlen(ptr) + delimcount + MEMPIT );
@@ -190,7 +253,6 @@ void loadcsvfile(char* fileName){
            break;
          }
 
-         format[curcol][currow] = DEFAULTFORMAT;
          lastrow = currow;
          lastcol = curcol;
          if (!allocated)
@@ -217,7 +279,7 @@ void loadcsvfile(char* fileName){
 /* Saves the current spreadsheet */
 void savecsvfile(char* fileName)
 {
-  char record[MAXROWCHARS] ="", valBuff[MAXVALCHARS] = "", delim[2]=";";
+  char record[MAXROWCHARS] ="", valBuff[MAXVALCHARS] = "", delim[2]=";",finfo[15] = "", temp[15]="";
   int col, row, overwrite, file;
   CELLPTR cellptr;
   FILE *stream;
@@ -228,7 +290,38 @@ void savecsvfile(char* fileName)
 
   stream = fopen(fileName, "w+");
 
-  for (row = 0; row <= rows; row++)
+  /* header */
+  strcpy(record , "");
+  for (col = 0; col <= cols; col++)
+  {
+   cellptr = cell[col][0];
+   if (cellptr != NULL)
+   {
+    strcpy(finfo,"");
+    strcat(record, cellptr->v.text);
+    if( format[col]&DOLLAR) {
+      strcat(finfo, "f:$");
+    }
+    else if( format[col] == 0 ) {
+      strcat(finfo, "f:L"); //justify-left
+    }
+    if( colwidth[col] != DEFAULTWIDTH ) {
+      sprintf(temp, "w:%d", colwidth[col]);
+      if(strlen(finfo) > 0) strcat(strcat(finfo, ","), temp);
+      else                  strcpy(finfo, temp);
+    }
+    if(strlen(finfo) > 0) {
+      sprintf(temp, "{%s}", finfo);
+      strcat(record, temp);
+    }
+   }
+   if(col < cols) strcat(record, delim);
+  }
+  strcat(record, "\n");
+  fwrite(record, strlen(record), 1, stream);
+
+  /* actual data */
+  for (row = 1; row <= rows; row++)
   {
    strcpy(record , "");
 
