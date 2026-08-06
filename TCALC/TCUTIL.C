@@ -690,14 +690,20 @@ int getcommand(char *msgstr, char *comstr)
 } /* getcommand */
 
 void trace(char* info){
-  char datatemp[79];
+  int inx = 0;
+  char *lastFewchars = info;
   if(info == NULL) strcpy(diagdata, "");
   else {
-    if( (strlen(diagdata) + strlen(info)) > MAXDIAGCHARS ) 
+    if( strlen(info) > 25 ) {
+      inx = strlen(info) - 25;
+      lastFewchars = &info[inx];
+    }
+
+    if( (strlen(diagdata) + strlen(lastFewchars)) > MAXDIAGCHARS ) 
       return; // cannot add trace anymore
-    strcpy( datatemp,  info);
+    
     strcat( diagdata, "\n");
-    strcat( diagdata, datatemp) ;
+    strcat( diagdata, lastFewchars) ;
   }
 }
 

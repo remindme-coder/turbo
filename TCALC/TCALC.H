@@ -23,6 +23,7 @@
 #define MSGCOLWIDTH "Enter the new column width:"
 #define MSGNOOPEN "Can't open the file."
 #define MSGNOCREATE "Can't create the file, in the directory!"
+#define MSGCURRUPT "Unable open the file. Please check data format!"
 #define MSGOVERWRITE "The file exists.  Do you want to overwrite it?"
 #define MSGFILELOMEM "Not enough memory for entire spreadsheet."
 #define MSGNOTURBOCALC "That is not a Turbo C++ TurboCalc spreadsheet."
@@ -251,6 +252,7 @@ void trace(char* info);
 void diagnostics(void);
 
 char* readentire(char* fileName);
+int validatecsvfile(char* fileName);
 void loadcsvfile(char* fileName);
 void savecsvfile(char* fileName);
 char finddelimiter(char *sheetheader, int *count);

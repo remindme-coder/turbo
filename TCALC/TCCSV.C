@@ -10,6 +10,8 @@
 
 const char nmbers[12] = "0123456789.";
 const char delimitchars[3] = ",;|";
+const char quot = '"';
+const char curly[2] = "{}";
 char delimiter = ';';
 
 long filesize(char* fileName)
@@ -55,13 +57,99 @@ int trimzeros(char *buff){
    return -1;
 }
 
+char* quotecell(char *vstring) {
+   int pos;
+   char text[MAXINPUT + 1];
+   if(!vstring || strlen(vstring) == 0) return vstring;
+
+   strcpy( text, vstring );
+   pos = strlen(text);
+   movmem(&text[pos], &text[pos+1], 1);
+   text[pos] = '"';
+   movmem(&text[0], &text[1], 1);
+   text[0] = '"';
+   
+   return text;
+}
+
+void unmaskcell(char *vstring) {
+   int pos;
+   if(!vstring || strlen(vstring) == 0) return;
+
+   pos = strlen(vstring);
+   while (pos >= 0)
+   {
+    pos -= 1;
+    if (vstring[pos] == '*'){
+     vstring[pos] = delimiter;
+    }
+   }
+}
+
+void maskrec(char *vstring) {
+  int tpos, length, quoted, pos;
+
+  pos = strlen(vstring) - 1;
+  while(pos >= 0) {
+   quoted = 0;
+
+   // skip delimiter
+   if(vstring[pos] == delimiter) pos--;
+
+   // skip trailing spaces
+   tpos = pos+1;
+   length = strlen(vstring);
+   while( vstring[pos] == ' ' ) pos--;
+   movmem(&vstring[tpos], &vstring[pos+1], length - tpos + 1);
+   length = length - (tpos - (pos + 1));
+
+   // skip quotation
+   if(vstring[pos] == quot) {
+    movmem(&vstring[pos+1], &vstring[pos], length - pos + 1);
+    length--;
+    quoted = 1; pos--;
+   }
+
+   while (pos >= 0 )
+   {
+    if( vstring[pos] == quot ) {
+     tpos = pos - 1;
+     while( vstring[tpos] == ' ' ) tpos--;
+     if( vstring[tpos] == delimiter ) {
+	  movmem(&vstring[pos+1], &vstring[pos], length - pos + 1);
+      length--;
+      pos = tpos;
+      break;
+     } else {
+      // Might be a quot within quotes
+     }
+    }
+    else if( vstring[pos] == delimiter ) {
+     if(!quoted )    break;
+     else vstring[pos] = '*';
+    }
+
+    pos--;
+   }
+
+   // skip forward spaces
+   tpos = pos + 1;
+   //length = strlen(vstring);
+   while( vstring[tpos] == ' ' ) tpos++;
+   movmem(&vstring[tpos], &vstring[pos+1], length - tpos + 1);
+   length = length - (tpos - (pos + 1));
+  }
+}
+
 /* strtok method requires delimitors separated by space, so add gaps */
 void insertspace(char *vstring){
-  int pos, found = 0, foundtwice = 0;
+  int pos, found = 0, foundtwice = 0,length;
   char debug[25];
   if(!vstring || strlen(vstring) == 0) return;
 
-  pos = strlen(vstring);
+  maskrec(vstring);// This will escape the quotation and delimiter
+  length = strlen(vstring);
+  pos = length;
   while (pos > 0)
   {
    pos -= 1;
@@ -72,14 +160,16 @@ void insertspace(char *vstring){
    else found = 0;
 
    if (foundtwice == 1) {
-    movmem(&vstring[pos+1], &vstring[pos+2], strlen(vstring) - pos + 1);
+    movmem(&vstring[pos+1], &vstring[pos+2], length - pos + 1);
+    length++;
     vstring[pos+1] = ' ';
     foundtwice = 0;
    }
   }
   // First column
   if (found == 1) {
-   movmem(&vstring[pos], &vstring[pos+1], strlen(vstring) -pos + 1);
+   movmem(&vstring[pos], &vstring[pos+1], length - pos + 1);
+   length++;
    vstring[pos] = ' ';
   }
   //sprintf(debug, "found:%d,Pos:%d", found, pos );
@@ -95,9 +185,9 @@ char finddelimiter(char *sheetheader, int *count){
       while(tmplen>-1) {  
          tmplen--;  
          /* format information arent considered */
-         if( sheetheader[tmplen] == '}' ) skip = 1;
+         if( curly[1] == sheetheader[tmplen] ) skip = 1;
          if( skip == 1 ) {
-            if( sheetheader[tmplen] == '{') skip = 0;
+            if( curly[0] == sheetheader[tmplen] ) skip = 0;
             continue;
          }
 
@@ -116,7 +206,7 @@ char finddelimiter(char *sheetheader, int *count){
 void findcolumformat(char *sheetheader){
    int length = strlen(sheetheader), colinx=0, i, scrptinx = 0, skip = 0, scrptlen, proplen;
    char fmt[25] = "",wdth[15], *pos1, *pos2;
-   trace(NULL);
+   //trace(NULL);
    
    i = 0;
    format[colinx] = DEFAULTFORMAT;
@@ -168,6 +258,28 @@ void findcolumformat(char *sheetheader){
    }
 }
 
+char* readsanity(char* filename, long totalSize) {
+   long curpos, length, i, readSize=0;
+   FILE *stream;char *docPtr;
+
+   i = 0;
+   while( totalSize > (MAXROWCHARS*(i+1)) && i < 3 ){
+      readSize += MAXROWCHARS; // consider top 3 rows
+      i++;
+   }
+
+   // only few chars left, so read them
+   if( (totalSize-readSize) < MAXROWCHARS ) readSize = totalSize;
+
+   docPtr = (char*)calloc(readSize , sizeof(char));
+   stream = fopen(filename,"r");
+   if(stream){
+      fread(docPtr,sizeof(char),readSize,stream);
+      fclose(stream);
+   }
+   return docPtr;
+}
+
 char* readentire(char* fileName){
    int num,bytes;
 
@@ -183,6 +295,70 @@ char* readentire(char* fileName){
       //free(docPtr);
    }
    return docPtr;
+}
+
+int validatecsvfile(char* filename){
+   long buffSize = filesize(filename);
+   char *doc, *ptr, tmp[MAXROWCHARS], temp[25] ;
+   int i = 0,j=0, length, dcount[3], chcount[3];
+   trace(NULL);
+
+   if( buffSize > memleft ) {
+      sprintf(temp,"Buff = %ld, MemLeft = %ld", buffSize, memleft);
+      trace( temp );
+
+      return -1; // maximum file size limitation
+   }
+	else if(buffSize > MAXROWCHARS) {
+      doc = readsanity(filename, buffSize);
+      if(!strchr(doc,'\n')) { free(doc); return -1;} // maximum record size limitation
+   }
+	else {
+      doc = readentire(filename);
+   }
+
+   if(!doc || strlen(doc) == 0) { free(doc); return 1;} // no data, its a good file
+
+   ptr = strtok(doc, "\n");
+
+   // Identify the column alignment for the first 3 rows
+   delimiter = finddelimiter(ptr, &dcount[i]);
+
+   // Header & 2 rows sanity check
+   while (ptr != NULL && i < 3) {
+      length = strlen(ptr);
+      strcpy(tmp, ptr);
+      tmp[length] = '\0';
+      
+      maskrec(tmp);
+      length = strlen(tmp);
+      chcount[i] = length;
+      dcount[i] = 0;
+      j=0;
+      while(j<length) {
+	      if(tmp[j] == delimiter ) dcount[i]++;
+	      j++;
+      }
+
+      sprintf(temp,"Row %d: len = %d, delim = %d",i,length, dcount[i]);
+      trace( temp );
+      ptr = strtok(NULL, "\n");
+      i++;
+   }
+   free(ptr);
+   free(doc);
+
+   // Validate column alignment
+   if(dcount[0] == dcount[1] ) return 1; // header matches first record
+   if(dcount[0] > 0 && chcount[1] == 0 && chcount[2] == 0  ) return 1; // header but no data, which is valid
+
+   // Invalid cases
+   if( (dcount[0] > 0) && (abs(dcount[0] - dcount[1]) > 5) ) return 0; // header not marginally aligned to first record, invalid
+   if( (dcount[0] > 0) && dcount[1] == 0 && dcount[2] == 0 ) return 0; // header not aligned to first or second, invalid
+
+   // TODO: A few more can be added later...
+
+   return 1;
 }
 
 void loadcsvfile(char* fileName){
@@ -238,7 +414,8 @@ void loadcsvfile(char* fileName){
          switch (rec.attrib)
          {
           case TEXT :
-           strcpy(rec.v.text, temp);
+           if(strchr(temp,'*')) unmaskcell(temp);
+           strcpy(rec.v.text, temp );
            if ((allocated = alloctext(curcol, currow, rec.v.text)) == TRUE)
             setoflags(curcol, currow, NOUPDATE);
            break;
@@ -298,7 +475,7 @@ void savecsvfile(char* fileName)
    if (cellptr != NULL)
    {
     strcpy(finfo,"");
-    strcat(record, cellptr->v.text);
+    strcat(record, strchr(cellptr->v.text, delimiter) ? quotecell(cellptr->v.text) : cellptr->v.text );
     if( format[col]&DOLLAR) {
       strcat(finfo, "f:$");
     }
@@ -333,7 +510,7 @@ void savecsvfile(char* fileName)
     {
      switch(cellptr->attrib)
      {
-      case TEXT :     strcat(record, cellptr->v.text);      break;
+      case TEXT :     strcat(record, strchr(cellptr->v.text, delimiter) ? quotecell(cellptr->v.text) : cellptr->v.text );      break;
       case VALUE :
         strcpy(valBuff, doubletostr(cellptr->v.value));
         strcat(record, valBuff);

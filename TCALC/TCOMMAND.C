@@ -219,7 +219,7 @@ void clearsheet(void)
 void loadsheet(char *filename)
 /* Loads a new spreadsheet */
 {
- int file;
+ int file, valid;
  char check[81], tempMSG[50];
 
  if (filename[0] == 0)
@@ -243,9 +243,18 @@ void loadsheet(char *filename)
 
  if( strstr( strupr(filename), ".CSV" ) ){
   close(file);
-  clearsheet();
 
-  loadcsvfile(filename);
+  valid = validatecsvfile(filename);
+  
+  if(valid == 1) {
+    clearsheet();
+    loadcsvfile(filename);
+  }
+  else {
+    if(valid == -1)   errormsg(MSGFILELOMEM);
+    else              errormsg(MSGCURRUPT);
+    return;
+  }
  } else {
   // Check for Turbo file
   read(file, check, strlen(name) + 1);
