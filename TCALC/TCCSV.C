@@ -57,20 +57,6 @@ int trimzeros(char *buff){
    return -1;
 }
 
-char* quotecell(char *vstring) {
-   int pos;
-   char text[MAXINPUT + 1];
-   if(!vstring || strlen(vstring) == 0) return vstring;
-
-   strcpy( text, vstring );
-   pos = strlen(text);
-   movmem(&text[pos], &text[pos+1], 1);
-   text[pos] = '"';
-   movmem(&text[0], &text[1], 1);
-   text[0] = '"';
-   
-   return text;
-}
 
 void unmaskcell(char *vstring) {
    int pos;
@@ -271,29 +257,36 @@ char* readsanity(char* filename, long totalSize) {
    // only few chars left, so read them
    if( (totalSize-readSize) < MAXROWCHARS ) readSize = totalSize;
 
-   docPtr = (char*)calloc(readSize , sizeof(char));
+   //docPtr = (char*)calloc(readSize , sizeof(char));
+   docPtr = (char*)malloc(readSize);
    stream = fopen(filename,"r");
    if(stream){
       fread(docPtr,sizeof(char),readSize,stream);
       fclose(stream);
    }
+   docPtr = (char*)removewords(docPtr);
    return docPtr;
 }
 
 char* readentire(char* fileName){
-   int num,bytes;
-
-   long buffSize = filesize(fileName);
-   //char *docPtr = (char*)malloc(buffSize + MEMPIT);
-   char *docPtr = (char*)calloc(buffSize , sizeof(char));
-
+   char *docPtr, temp[25];
    FILE *stream;
+   long buffSize = filesize(fileName);
+   
+   //docPtr = (char*)malloc(buffSize + ceil((buffSize/1000) * MEMPIT) ) ;
+   docPtr = (char*)calloc(buffSize , sizeof(char));
+   trace(NULL);
+   writef(1, 25, WHITE, 79, "CSV data Loaded!");
+   
    stream = fopen(fileName,"r");
    if(stream){
       fread(docPtr,sizeof(char),buffSize,stream);
 	   fclose(stream);
       //free(docPtr);
    }
+
+   sprintf(temp, "BuffSZ:%ld, DataSZ:%d", buffSize, strlen(docPtr));
+   trace(temp );
    return docPtr;
 }
 
@@ -301,20 +294,17 @@ int validatecsvfile(char* filename){
    long buffSize = filesize(filename);
    char *doc, *ptr, tmp[MAXROWCHARS], temp[25] ;
    int i = 0,j=0, length, dcount[3], chcount[3];
-   trace(NULL);
+   //trace(NULL);
 
    if( buffSize > memleft ) {
       sprintf(temp,"Buff = %ld, MemLeft = %ld", buffSize, memleft);
-      trace( temp );
+      //trace( temp );
 
       return -1; // maximum file size limitation
    }
-	else if(buffSize > MAXROWCHARS) {
+	else {
       doc = readsanity(filename, buffSize);
       if(!strchr(doc,'\n')) { free(doc); return -1;} // maximum record size limitation
-   }
-	else {
-      doc = readentire(filename);
    }
 
    if(!doc || strlen(doc) == 0) { free(doc); return 1;} // no data, its a good file
@@ -340,8 +330,8 @@ int validatecsvfile(char* filename){
 	      j++;
       }
 
-      sprintf(temp,"Row %d: len = %d, delim = %d",i,length, dcount[i]);
-      trace( temp );
+      //sprintf(temp,"Row %d: len = %d, delim = %d",i,length, dcount[i]);
+      //trace( temp );
       ptr = strtok(NULL, "\n");
       i++;
    }
@@ -362,12 +352,12 @@ int validatecsvfile(char* filename){
 }
 
 void loadcsvfile(char* fileName){
-   int i=0, j=0, maxI=0, maxJ=0, allocated, delimcount,dummy;
+   int i=0, j=0, maxI=0, maxJ=0, allocated, delimcount, len,dummy;
    struct CELLREC rec;
-   char* doc = readentire(fileName);
    char *ptr,*temp, nLine[2] = "\n", delim[2] = ";", debug[25];
    char* recs[MAXROWS];
-
+   char* doc = readentire(fileName);
+   
    // If the doc contains no data
    if(!doc || strlen(doc) == 0) return;
    
@@ -382,20 +372,17 @@ void loadcsvfile(char* fileName){
    //trace(debug);
    strset(delim, delimiter);
 
-   recs[0] = (char*)malloc( strlen(ptr) + delimcount + MEMPIT );
-   strcpy(recs[0], ptr);
-   insertspace(recs[0]);
-   ptr = strtok(NULL, nLine);
-   i++;
    
    while (ptr != NULL) {
-      recs[i] = (char*)malloc( strlen(ptr) + delimcount + MEMPIT );
-      strcpy(recs[i], ptr);
-      insertspace(recs[i]);
+      len = strlen(ptr);
+      if(len > 0){
+         recs[i] = (char*)malloc( len+ delimcount );
+         strcpy(recs[i], ptr);
+         insertspace(recs[i]);
+         i++;
+         if(maxI < i-1) maxI = i-1;
+      }
       ptr = strtok(NULL, nLine);
-      i++;
-
-      if(maxI < i-1) maxI = i-1;
    }
    free(doc);
 
@@ -475,7 +462,14 @@ void savecsvfile(char* fileName)
    if (cellptr != NULL)
    {
     strcpy(finfo,"");
-    strcat(record, strchr(cellptr->v.text, delimiter) ? quotecell(cellptr->v.text) : cellptr->v.text );
+
+    if(strchr(cellptr->v.text, delimiter)) {
+      strcat(record, "\"" );
+      strcat(record, cellptr->v.text );
+      strcat(record, "\"" );
+    } 
+    else strcat(record, cellptr->v.text );
+    
     if( format[col]&DOLLAR) {
       strcat(finfo, "f:$");
     }
@@ -510,7 +504,14 @@ void savecsvfile(char* fileName)
     {
      switch(cellptr->attrib)
      {
-      case TEXT :     strcat(record, strchr(cellptr->v.text, delimiter) ? quotecell(cellptr->v.text) : cellptr->v.text );      break;
+      case TEXT :     
+       if(strchr(cellptr->v.text, delimiter)) {
+        strcat(record, "\"" );
+        strcat(record, cellptr->v.text );
+        strcat(record, "\"" );
+       } 
+       else strcat(record, cellptr->v.text );
+       break;
       case VALUE :
         strcpy(valBuff, doubletostr(cellptr->v.value));
         strcat(record, valBuff);

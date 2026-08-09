@@ -248,6 +248,7 @@ void loadsheet(char *filename)
   
   if(valid == 1) {
     clearsheet();
+    writef(1, 25, WHITE, 79, MSGLOADING);
     loadcsvfile(filename);
   }
   else {
@@ -275,13 +276,14 @@ void loadsheet(char *filename)
  // sheet name  
  strcpy(sheetname, filename);
  
- writef(1, 25, WHITE, strlen(MSGLOADING), "");
- gotoxy(1, 25);
  printfreemem();
  
  curcol = currow = 0;
  setrightcol();
  displayscreen(NOUPDATE);
+ writef(1, 25, WHITE, 79, "");
+ gotoxy(1, 25);
+ 
  changed = FALSE;
 } /* loadsheet */
 

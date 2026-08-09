@@ -601,6 +601,24 @@ void swap(int *val1, int *val2)
  *val2 = temp;
 } /* swap */
 
+char* removewords(char *buff){
+  int length, i = 0;
+
+  if(!buff || strlen(buff) == 0) return buff;
+
+  length = strlen(buff);
+  i = 0;
+  while( i<length ) { 
+    if ( isalpha( buff[i] ) || isdigit( buff[i] ) ) {
+      movmem(&buff[i+1], &buff[i], (length-1+i) );
+      length--;
+    }
+    else i++;
+  }
+
+  return buff;
+}
+
 char* trimdecimals(char *buff){
   char *pos;
   int length;
@@ -710,14 +728,17 @@ void trace(char* info){
 void diagnostics(void)
 {
  int ch;char *ptr, diagCopy[MAXDIAGCHARS];
+ long memdata = coreleft();
  
- writef(1, 24, LOWCOMMANDCOLOR, 79, "leftcol:%d , rightcol:%d, toprow:%d, bottomrow:%d",
-  leftcol , rightcol, toprow, bottomrow );
+ writef(1, 24, LOWCOMMANDCOLOR, 79, "core memory available :%ld",  memdata  );
+ memleft = memdata;
+ printfreemem();
  ch = toupper(getkey());
 
  if(ch != ESC){
-  writef(1, 24, LOWCOMMANDCOLOR, 79, "curcol:%d, currow:%d, lastcol:%d, lastrow:%d",
-   curcol, currow, lastcol, lastrow );
+  writef(1, 24, LOWCOMMANDCOLOR, 79, "Frame:(%d,%d - %d,%d), Picture:(%d,%d - %d,%d)",
+    toprow, leftcol , bottomrow, rightcol, 
+    currow, curcol, lastrow, lastcol );
   ch = toupper(getkey());
 
   if(ch != ESC){
