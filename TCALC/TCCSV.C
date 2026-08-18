@@ -8,7 +8,8 @@
 #include <string.h>
 #include "tcalc.h"
 
-const char nmbers[12] = "0123456789.";
+const char nmbers[12] = "0123456789.\0";
+const char spcl[30] = "-,.;|'\"?\\/[]<>!@#$%&*_+\0";
 const char delimitchars[3] = ",;|";
 const char quot = '"';
 const char curly[2] = "{}";
@@ -27,27 +28,43 @@ long filesize(char* fileName)
    return length;
 }
 
-int attribtype(char* data) {
-   char *loc;
-   int i=0, type = VALUE;
-
-   if(!data || strlen(data) == 0) return TEXT;
-
-   // Check if the type is not numeric
+int isnumeric(char *data){
+   int i=0;
+   if(!data || strlen(data) == 0) return 0;
    for( i=0; i<strlen(data); i++ ){
-    if(strchr(nmbers, data[i]) == NULL) {
-       // Check if the text type is a formula
-	    if(strchr(data, ':' ) != NULL)
-	      type = FORMULA;
-	    else if(strchr(data, '(' ) != NULL && strchr(data, ')' ) != NULL )
-         type = FORMULA;
-       else 
-         type = TEXT;
-       break;
-      }
+      if(!strchr(nmbers, data[i])) return 0;
+   }
+   return 1;
+}
+int attribtype(char* data) {
+   int i=0, hasspace=0, hasbrackets=0, hascolon=0, hasalnum=0, haspunc=0;
+   
+   if(!data || strlen(data) == 0) return TEXT;
+   
+   // Check if the text is numeric
+   if(isnumeric(data)) return VALUE;
+   
+   // check if the text is alpha numeric / space/ punc
+   for( i=0; i<strlen(data); i++ ){
+      //if( isalpha(data[i]) || isdigit(data[i]) || strchr("-,.;|\"?\\/[]<>!@#$%&*_+", data[i]))
+	  if(isspace(data[i])) hasspace = 1;
+	  else if(isalnum(data[i])) hasalnum = 1;
+	  else if(strchr(spcl, data[i])) haspunc = 1;// everything but :()
+	  else if(data[i]==':') hascolon = 1;
+	  else if(strchr("()", data[i])) hasbrackets = 1;
+   }
+   
+   if(!haspunc && !hasspace ){
+	  // AB:B5
+	  if(!hasbrackets && hasalnum && hascolon ) return FORMULA;
+	  // SQRT(2)
+	  if(!hascolon && hasalnum && hasbrackets ) {
+		  if(strchr(data, '(') && strchr(data, ')'))	return FORMULA;
+		  else return TEXT;
+	  }
    }
 
-   return type;
+   return TEXT;
 }
 
 int trimzeros(char *buff){
@@ -264,7 +281,7 @@ char* readsanity(char* filename, long totalSize) {
       fread(docPtr,sizeof(char),readSize,stream);
       fclose(stream);
    }
-   docPtr = (char*)removewords(docPtr);
+   //docPtr = (char*)removewords(docPtr);
    return docPtr;
 }
 
@@ -274,9 +291,14 @@ char* readentire(char* fileName){
    long buffSize = filesize(fileName);
    
    //docPtr = (char*)malloc(buffSize + ceil((buffSize/1000) * MEMPIT) ) ;
-   docPtr = (char*)calloc(buffSize , sizeof(char));
+   if(buffSize > (3 * 1024) /* 4KB*/)
+      docPtr = (char*)calloc(buffSize , sizeof(char));
+   else if(buffSize > (2 * 1024) /* 2KB*/)
+      docPtr = (char*)calloc(buffSize , sizeof(char));
+   else
+      docPtr = (char*)malloc(buffSize) ;
+
    trace(NULL);
-   writef(1, 25, WHITE, 79, "CSV data Loaded!");
    
    stream = fopen(fileName,"r");
    if(stream){
@@ -293,7 +315,7 @@ char* readentire(char* fileName){
 int validatecsvfile(char* filename){
    long buffSize = filesize(filename);
    char *doc, *ptr, tmp[MAXROWCHARS], temp[25] ;
-   int i = 0,j=0, length, dcount[3], chcount[3];
+   int i = 0,j=0, length, dcount[3], chcount[3], wdth=0, overflo=0;
    //trace(NULL);
 
    if( buffSize > memleft ) {
@@ -320,15 +342,23 @@ int validatecsvfile(char* filename){
       strcpy(tmp, ptr);
       tmp[length] = '\0';
       
-      maskrec(tmp);
+      insertspace(tmp);
       length = strlen(tmp);
       chcount[i] = length;
       dcount[i] = 0;
+      wdth=0;
       j=0;
       while(j<length) {
-	      if(tmp[j] == delimiter ) dcount[i]++;
+	      if(tmp[j] == delimiter ) { 
+            dcount[i]++; 
+            if(wdth > MAXCOLWIDTH) overflo = 1;
+            wdth=0; 
+         }
+         else wdth++;
 	      j++;
       }
+
+      if(wdth > MAXCOLWIDTH) overflo = 1;
 
       //sprintf(temp,"Row %d: len = %d, delim = %d",i,length, dcount[i]);
       //trace( temp );
@@ -338,13 +368,16 @@ int validatecsvfile(char* filename){
    free(ptr);
    free(doc);
 
+   // Large text
+   if(overflo) return -2; // Indicates data that are huge for TCALC
+
    // Validate column alignment
    if(dcount[0] == dcount[1] ) return 1; // header matches first record
    if(dcount[0] > 0 && chcount[1] == 0 && chcount[2] == 0  ) return 1; // header but no data, which is valid
 
    // Invalid cases
-   if( (dcount[0] > 0) && (abs(dcount[0] - dcount[1]) > 5) ) return 0; // header not marginally aligned to first record, invalid
-   if( (dcount[0] > 0) && dcount[1] == 0 && dcount[2] == 0 ) return 0; // header not aligned to first or second, invalid
+   if( (dcount[0] > 0) && (abs(dcount[0] - dcount[1]) > 5) ) return -3; // header not marginally aligned to first record, invalid
+   if( (dcount[0] > 0) && dcount[1] == 0 && dcount[2] == 0 ) return -3; // header not aligned to first or second, invalid
 
    // TODO: A few more can be added later...
 
@@ -380,11 +413,11 @@ void loadcsvfile(char* fileName){
          strcpy(recs[i], ptr);
          insertspace(recs[i]);
          i++;
-         if(maxI < i-1) maxI = i-1;
       }
       ptr = strtok(NULL, nLine);
    }
    free(doc);
+   maxI = i-1;
 
    // Split Column-wise
    for(i=0; i<= maxI; i++) {

@@ -643,8 +643,8 @@ char* trim(char *buff){
   // start forward
   length = strlen(buff);
   i = 0;
-  while( i<length && buff[i] == ' ' ) { i++;  }
-  movmem(&buff[i], &buff[0], length );
+  while( i<length && buff[i] == ' ' ) { i++;length--;  }
+  movmem(&buff[i], &buff[0], length+1 );
 
   return buff;
 }
@@ -729,7 +729,7 @@ void diagnostics(void)
 {
  int ch;char *ptr, diagCopy[MAXDIAGCHARS];
  long memdata = coreleft();
- 
+
  writef(1, 24, LOWCOMMANDCOLOR, 79, "core memory available :%ld",  memdata  );
  memleft = memdata;
  printfreemem();

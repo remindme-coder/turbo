@@ -252,8 +252,8 @@ void loadsheet(char *filename)
     loadcsvfile(filename);
   }
   else {
-    if(valid == -1)   errormsg(MSGFILELOMEM);
-    else              errormsg(MSGCURRUPT);
+    if(valid == -1)     errormsg(MSGFILELOMEM);
+    else if (valid < -1) errormsg(MSGCURRUPT);
     return;
   }
  } else {
