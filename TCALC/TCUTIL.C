@@ -92,6 +92,7 @@ void deletecell(int col, int row, int display)
 void printfreemem(void)
 /* Prints the amount of free memory */
 {
+ memleft = coreleft();
  writef(strlen(MSGMEMORY) + 2, 1, MEMORYCOLOR, 6, "%6ld", memleft);
 } /* printfreemem */
 
@@ -630,6 +631,50 @@ char* trimdecimals(char *buff){
   }
   return buff;
 }
+char* trimCharsRight(char *buff, char *chars){
+  char rem[10];
+  int length, i = 0;
+  strcpy(rem,chars);
+  rem[strlen(chars)] = 0;
+
+  if(!buff || strlen(buff) == 0) return buff;
+
+  // Lets discard junkies present at the end
+  i=0;
+  while( i<strlen(buff) && ( isprint(buff[i]) ||  iscntrl(buff[i]) )) {  i++;  }
+  if( i<strlen(buff) ) buff[i] = 0;
+
+  // reverse trim
+  i = strlen(buff) - 1;
+  while( i>=0 && iscntrl(buff[i])) {  buff[i] = 0; i--;  }
+  i = strlen(buff) - 1;
+  while( i>=0 && strchr(rem, buff[i])) {  buff[i] = 0; i--;  }
+
+  return buff;
+}
+char* trimJunkRight(char *buff){
+  return trimCharsRight(buff, " \r\n");
+}
+char* trimChars(char *buff, char *chars){
+  char rem[10];
+  int length, i = 0;
+  strcpy(rem,chars);
+  rem[strlen(chars)] = 0;
+
+  // start reverse
+  buff = trimCharsRight(buff,chars);
+  
+  // start forward
+  length = strlen(buff);
+  i = 0;
+  while( i<length && strchr(rem, buff[i])) { i++;length--;  }
+  movmem(&buff[i], &buff[0], length+1 );
+
+  return buff;
+}
+char* trimJunk(char *buff){
+  return trimChars(buff, " \r\n");
+}
 char* trim(char *buff){
   char *pos;
   int length, i = 0;
@@ -685,6 +730,13 @@ void initvars(void)
  setmem(colwidth, sizeof(colwidth), DEFAULTWIDTH);
  setmem(cell, sizeof(cell), 0);
  setmem(format, sizeof(format), DEFAULTFORMAT);
+
+ // In case if the previous file is multi paged in 100's
+ strcpy(di.fileName,"");
+ di.partialSize = 0;
+ di.totalSize = 0;
+ di.curPage = 0;
+ di.offsets[1] = 0; 
 } /* initvars */
 
 int getcommand(char *msgstr, char *comstr)

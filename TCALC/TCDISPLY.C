@@ -23,8 +23,13 @@ void writef(int col, int row, int color, int width, char *format, ...)
  char output[81];
  int len;
 
- va_start(arg_ptr, format);
- vsprintf(output, format, arg_ptr);
+ if(strchr(format,'%')){
+  va_start(arg_ptr, format);
+  vsprintf(output, format, arg_ptr);
+  va_end(arg_ptr);
+ } else {
+  strcpy(output, format);
+ }
  output[width] = 0;
  if ((len = strlen(output)) < width)
   setmem(&output[len], width - len, ' ');
@@ -119,10 +124,11 @@ void clearlastcol()
 void printrow(void)
 /* Prints the row headings */
 {
- int row;
+ int row, page;
+ page = (di.curPage <= 1) ? 0 : di.curPage-1;
 
  for (row = 0; row < SCREENROWS; row++)
-  writef(1, row + 3, HEADERCOLOR, LEFTMARGIN, "%-d", row + toprow + 1);
+  writef(1, row + 3, HEADERCOLOR, LEFTMARGIN, "%-d", row + toprow + 1 + (page * MAXROWS) );
 } /* printrow */
 
 void displaycell(int col, int row, int highlighting, int updating)

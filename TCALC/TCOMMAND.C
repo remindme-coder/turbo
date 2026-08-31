@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <conio.h>
 #include "tcalc.h"
+#include "tcfile.h"
 
 char *name = MSGNAME;
 char sheetname[MAXINPUT] = "";
@@ -196,7 +197,7 @@ void editcell(CELLPTR ecell)
  changed = TRUE;
 } /* editcell */
 
-void clearsheet(void)
+void clearsheet(int keepFile)
 /* Clears the current spreadsheet */
 {
  int col, row;
@@ -206,15 +207,32 @@ void clearsheet(void)
   for (col = 0; col <= lastcol; col++)
    deletecell(col, row, NOUPDATE);
  }
- initvars();
+ if(!keepFile) 
+ {
+  initvars();
+  strcpy(sheetname, "");
+ }
+ leftcol = toprow = curcol = currow = lastcol = lastrow = 0;
  setrightcol();
  setbottomrow();
- strcpy(sheetname, "");
  displayscreen(NOUPDATE);
  printfreemem();
  changed = FALSE;
 } /* clearsheet */
 
+void loadPage(int prevNext /*-1 is prev, +1 is next, 0 curr*/)
+{
+  clearsheet(1);
+  writef(1, 25, WHITE, 79, MSGLOADING);
+  loadcsvfile(sheetname, prevNext);
+  printfreemem();
+ 
+  curcol = currow = 0;
+  setrightcol();
+  //displayscreen(NOUPDATE);
+  writef(1, 25, WHITE, 79, "");
+  gotoxy(1, 25);
+}
 
 void loadsheet(char *filename)
 /* Loads a new spreadsheet */
@@ -247,9 +265,9 @@ void loadsheet(char *filename)
   valid = validatecsvfile(filename);
   
   if(valid == 1) {
-    clearsheet();
+    clearsheet(0);
     writef(1, 25, WHITE, 79, MSGLOADING);
-    loadcsvfile(filename);
+    loadcsvfile(filename, 0);
   }
   else {
     if(valid == -1)     errormsg(MSGFILELOMEM);
@@ -267,7 +285,7 @@ void loadsheet(char *filename)
   }
   writef(1, 25, PROMPTCOLOR, 79, MSGLOADING);
   gotoxy(strlen(MSGLOADING) + 1, 25);
-  clearsheet();
+  clearsheet(0);
 
   loadturbofile(file);
   close(file);
@@ -806,7 +824,7 @@ void smenu(void)
    break;
   case 3 :
    checkforsave();
-   clearsheet();
+   clearsheet(0);
    break;
  } /* switch */
 } /* smenu */

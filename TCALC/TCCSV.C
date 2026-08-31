@@ -7,6 +7,7 @@
 #include <conio.h>
 #include <string.h>
 #include "tcalc.h"
+#include "tcfile.h"
 
 const char nmbers[12] = "0123456789.\0";
 const char spcl[30] = "-,.;|'\"?\\/[]<>!@#$%&*_+\0";
@@ -14,19 +15,7 @@ const char delimitchars[3] = ",;|";
 const char quot = '"';
 const char curly[2] = "{}";
 char delimiter = ';';
-
-long filesize(char* fileName)
-{
-   long curpos, length;
-   FILE *stream;
-	stream = fopen(fileName,"r");
-   curpos = ftell(stream);
-   fseek(stream, 0L, SEEK_END);
-   length = ftell(stream);
-   fseek(stream, curpos, SEEK_SET);
-   fclose(stream);
-   return length;
-}
+int delimCount = 0;
 
 int isnumeric(char *data){
    int i=0;
@@ -180,7 +169,7 @@ void insertspace(char *vstring){
 }
 
 char finddelimiter(char *sheetheader, int *count){
-   int length = strlen(sheetheader), tmplen=0, tmpcount=0, delimcount=0, i, skip = 0;
+   int length = strlen(sheetheader), tmplen=0, tmpcount=0, dcount=0, i, skip = 0;
    char delim = delimitchars[0];
    for( i=0; i<strlen(delimitchars); i++ ){
       tmplen = length;
@@ -196,8 +185,8 @@ char finddelimiter(char *sheetheader, int *count){
 
          if( sheetheader[tmplen] == delimitchars[i] ) tmpcount++; 
       }
-      if(delimcount < tmpcount){
-         delimcount = tmpcount;
+      if(dcount < tmpcount){
+         dcount = tmpcount;
          *count = tmpcount;
          delim = delimitchars[i];
       } 
@@ -261,57 +250,6 @@ void findcolumformat(char *sheetheader){
    }
 }
 
-char* readsanity(char* filename, long totalSize) {
-   long curpos, length, i, readSize=0;
-   FILE *stream;char *docPtr;
-
-   i = 0;
-   while( totalSize > (MAXROWCHARS*(i+1)) && i < 3 ){
-      readSize += MAXROWCHARS; // consider top 3 rows
-      i++;
-   }
-
-   // only few chars left, so read them
-   if( (totalSize-readSize) < MAXROWCHARS ) readSize = totalSize;
-
-   //docPtr = (char*)calloc(readSize , sizeof(char));
-   docPtr = (char*)malloc(readSize);
-   stream = fopen(filename,"r");
-   if(stream){
-      fread(docPtr,sizeof(char),readSize,stream);
-      fclose(stream);
-   }
-   //docPtr = (char*)removewords(docPtr);
-   return docPtr;
-}
-
-char* readentire(char* fileName){
-   char *docPtr, temp[25];
-   FILE *stream;
-   long buffSize = filesize(fileName);
-   
-   //docPtr = (char*)malloc(buffSize + ceil((buffSize/1000) * MEMPIT) ) ;
-   if(buffSize > (3 * 1024) /* 4KB*/)
-      docPtr = (char*)calloc(buffSize , sizeof(char));
-   else if(buffSize > (2 * 1024) /* 2KB*/)
-      docPtr = (char*)calloc(buffSize , sizeof(char));
-   else
-      docPtr = (char*)malloc(buffSize) ;
-
-   trace(NULL);
-   
-   stream = fopen(fileName,"r");
-   if(stream){
-      fread(docPtr,sizeof(char),buffSize,stream);
-	   fclose(stream);
-      //free(docPtr);
-   }
-
-   sprintf(temp, "BuffSZ:%ld, DataSZ:%d", buffSize, strlen(docPtr));
-   trace(temp );
-   return docPtr;
-}
-
 int validatecsvfile(char* filename){
    long buffSize = filesize(filename);
    char *doc, *ptr, tmp[MAXROWCHARS], temp[25] ;
@@ -325,7 +263,7 @@ int validatecsvfile(char* filename){
       return -1; // maximum file size limitation
    }
 	else {
-      doc = readsanity(filename, buffSize);
+      doc = readSanity(filename, buffSize);
       if(!strchr(doc,'\n')) { free(doc); return -1;} // maximum record size limitation
    }
 
@@ -384,99 +322,116 @@ int validatecsvfile(char* filename){
    return 1;
 }
 
-void loadcsvfile(char* fileName){
-   int i=0, j=0, maxI=0, maxJ=0, allocated, delimcount, len,dummy;
+void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/){
+   int i=0, j=0, maxJ=0, allocated, len, dummy,last = FALSE, fin = FALSE;
    struct CELLREC rec;
-   char *ptr,*temp, nLine[2] = "\n", delim[2] = ";", debug[25];
-   char* recs[MAXROWS];
-   char* doc = readentire(fileName);
+   char *ptr,*prevPtr,*temp, delim[2] = ";", debug[25];
+   char record[MAXROWCHARS];
+   char* doc = readEntire(fileName);
    
    // If the doc contains no data
    if(!doc || strlen(doc) == 0) return;
    
    // Split Row-wise starting from header
-   ptr = strtok(doc, nLine);
-   //trace(NULL);
+   ptr = strchr(doc, '\n');
+   if(!ptr) strcpy(record, doc );
+   else {
+      len = (int)(ptr - doc);
+      memcpy( record, doc, len );
+      record[len] = 0;
+   }
 
-   // Identify the delimiter from the sheet header
-   delimiter = finddelimiter(ptr, &delimcount);
-   findcolumformat(ptr);
-   sprintf(debug, "column count : %d", delimcount+1);
-   //trace(debug);
+   if(prevNext == 0){
+      // Identify the delimiter from the sheet header
+      delimiter = finddelimiter(record, &delimCount);
+      findcolumformat(record);
+      logmsg( "column count : %d", delimCount+1);
+   }
    strset(delim, delimiter);
 
-   
-   while (ptr != NULL) {
-      len = strlen(ptr);
+   do {
       if(len > 0){
-         recs[i] = (char*)malloc( len+ delimcount );
-         strcpy(recs[i], ptr);
-         insertspace(recs[i]);
+         insertspace(record);
+
+         // Split column-wise
+         j=0;
+         temp = strtok(record, delim);
+         temp = trim(temp);
+         currow = i;
+
+         do{
+            rec.attrib = attribtype(temp);
+            curcol = j;
+            
+            switch (rec.attrib)
+            {
+            case TEXT :
+            if(strchr(temp,'*')) unmaskcell(temp);
+            strcpy(rec.v.text, temp );
+            if ((allocated = alloctext(curcol, currow, rec.v.text)) == TRUE)
+               setoflags(curcol, currow, NOUPDATE);
+            break;
+            case VALUE :
+            rec.v.value = atof(temp);
+            allocated = allocvalue(curcol, currow, rec.v.value);
+            break;
+            case FORMULA :
+            strcpy(rec.v.f.formula, temp);
+            rec.v.f.fvalue = parse(rec.v.f.formula, &dummy);
+            allocated = allocformula(curcol, currow, rec.v.f.formula, rec.v.f.fvalue);
+            break;
+            }
+
+            lastrow = currow;
+            lastcol = curcol;
+            if (!allocated)
+            {
+            errormsg(MSGFILELOMEM);
+            if(curcol == 0) {
+               lastrow = currow-1;
+               lastcol = maxJ;
+            }
+            break;
+            }
+
+            // Next field in the row
+            temp = strtok(NULL, delim);
+            j++;
+         } while (temp != NULL);
+
+         if (!allocated) break; // allocation didn't happen
+         if(maxJ < j-1) maxJ = j-1;
          i++;
       }
-      ptr = strtok(NULL, nLine);
-   }
-   free(doc);
-   maxI = i-1;
 
-   // Split Column-wise
-   for(i=0; i<= maxI; i++) {
-      j=0;
-      temp = recs[i];
-      temp = strtok(temp, delim);
-      temp = trim(temp);
-      currow = i;
-
-      do{
-         rec.attrib = attribtype(temp);
-         curcol = j;
-         
-         switch (rec.attrib)
-         {
-          case TEXT :
-           if(strchr(temp,'*')) unmaskcell(temp);
-           strcpy(rec.v.text, temp );
-           if ((allocated = alloctext(curcol, currow, rec.v.text)) == TRUE)
-            setoflags(curcol, currow, NOUPDATE);
-           break;
-          case VALUE :
-           rec.v.value = atof(temp);
-           allocated = allocvalue(curcol, currow, rec.v.value);
-           break;
-          case FORMULA :
-           strcpy(rec.v.f.formula, temp);
-           rec.v.f.fvalue = parse(rec.v.f.formula, &dummy);
-           allocated = allocformula(curcol, currow, rec.v.f.formula, rec.v.f.fvalue);
-           break;
+      if(!last){
+         prevPtr = ptr;
+         prevPtr++;
+         ptr = strchr(prevPtr, '\n');
+         if(!ptr) {
+            strcpy(record, prevPtr );
+            last = TRUE;
          }
-
+         else {
+            len = (int)(ptr - prevPtr);
+            memcpy( record, prevPtr, len );
+            record[len] = 0;
+         }
+         //logmsg( "Rec is : %s\n", record);
+      } else {
+         fin = TRUE;
          lastrow = currow;
-         lastcol = curcol;
-         if (!allocated)
-         {
-          errormsg(MSGFILELOMEM);
-          if(curcol == 0) {
-            lastrow = currow-1;
-            lastcol = maxJ;
-          }
-          break;
-         }
-
-         // Next field in the row
-         temp = strtok(NULL, delim);
-         j++;
-      } while (temp != NULL);
-
-      if (!allocated) break; // allocation didn't happen
-      if(maxJ < j-1) maxJ = j-1;
-      free(recs[i]);
-   }
+         lastcol = maxJ;
+      }
+   } while( !fin );
+   //free(doc);
+   
 }
 
 /* Saves the current spreadsheet */
 void savecsvfile(char* fileName)
 {
-  char record[MAXROWCHARS] ="", valBuff[MAXVALCHARS] = "", delim[2]=";",finfo[15] = "", temp[15]="";
+  char record[MAXROWCHARS] ="",dataBuff[MAXVALCHARS] = "", delim[2]=";",finfo[15] = "", temp[15]="";
   int col, row, overwrite, file;
   CELLPTR cellptr;
   FILE *stream;
@@ -495,13 +450,18 @@ void savecsvfile(char* fileName)
    if (cellptr != NULL)
    {
     strcpy(finfo,"");
+    strcpy(dataBuff,cellptr->v.text);
 
-    if(strchr(cellptr->v.text, delimiter)) {
+    if(strlen(dataBuff)==0) {
+      strcpy(dataBuff, doubletostr(cellptr->v.value));
+      strcat(record, dataBuff);
+    }
+    else if(strchr(dataBuff, delimiter)) {
       strcat(record, "\"" );
-      strcat(record, cellptr->v.text );
+      strcat(record, dataBuff );
       strcat(record, "\"" );
     } 
-    else strcat(record, cellptr->v.text );
+    else strcat(record, dataBuff );
     
     if( format[col]&DOLLAR) {
       strcat(finfo, "f:$");
@@ -546,8 +506,8 @@ void savecsvfile(char* fileName)
        else strcat(record, cellptr->v.text );
        break;
       case VALUE :
-        strcpy(valBuff, doubletostr(cellptr->v.value));
-        strcat(record, valBuff);
+        strcpy(dataBuff, doubletostr(cellptr->v.value));
+        strcat(record, dataBuff);
         break;
       case FORMULA :  strcat(record, cellptr->v.f.formula);      break;
       default : break;
@@ -555,7 +515,7 @@ void savecsvfile(char* fileName)
     }
     if(col < cols) strcat(record, delim);
    }
-   strcat(record, "\n");
+   if(row < rows) strcat(record, "\n");
 
    // Write the record
    fwrite(record, strlen(record), 1, stream);

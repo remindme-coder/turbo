@@ -8,13 +8,14 @@
 #include <dos.h>
 #include <conio.h>
 #include "tcalc.h"
+#include "tcfile.h"
 
 CELLPTR cell[MAXCOLS][MAXROWS], curcell;
 unsigned char format[MAXCOLS];
 unsigned char colwidth[MAXCOLS];
 unsigned char colstart[SCREENCOLS];
 unsigned char diagdata[MAXDIAGCHARS];
-int leftcol, rightcol, toprow, bottomrow, curcol, currow, lastcol, lastrow;
+int leftcol, rightcol, toprow, bottomrow, curcol, currow, lastcol, lastrow, atbottom, attop;
 char changed = FALSE;
 char formdisplay = FALSE;
 char autocalc = TRUE;
@@ -55,8 +56,17 @@ void run()
      recalc();
     break;
    case PGUPKEY :
+    atbottom = 0;
     toprow -= 20;
     currow -= 20;
+    if(attop && isPagePresent(-1)) {
+      loadPage(-1);
+      attop = 0;
+      atbottom = 1;
+      currow = MAXROWS - 1;
+      toprow = MAXROWS - 20;
+    }
+    if(currow <= 0 && toprow <= 0)       attop = 1;
     if (currow < 0)
      currow = toprow = 0;
     else if (toprow < 0)
@@ -68,8 +78,14 @@ void run()
     displayscreen(NOUPDATE);
     break;
    case PGDNKEY :
+    attop = 0;
     toprow += 20;
     currow += 20;
+    if(atbottom && isPagePresent(+1)) {
+      loadPage(+1);
+      attop = 1;
+      atbottom = 0;
+    }
     if ((currow >= MAXROWS) && (toprow >= MAXROWS))
     {
      currow = MAXROWS - 1;
@@ -80,6 +96,7 @@ void run()
      currow -= (toprow + 20 - MAXROWS);
      toprow = MAXROWS - 20;
     }
+    if(toprow == (MAXROWS - 20) && currow == (MAXROWS-1))       atbottom = 1;
     setbottomrow();
     displayscreen(NOUPDATE);
     break;
@@ -122,9 +139,11 @@ void run()
     displayscreen(NOUPDATE);
     break;
    case UPKEY :
+    atbottom = 0;
     moverowup();
     break;
    case DOWNKEY :
+    attop = 0;
     moverowdown();
     break;
    case LEFTKEY :

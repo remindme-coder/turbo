@@ -137,6 +137,17 @@ struct CELLREC
 
 typedef struct CELLREC *CELLPTR;
 
+struct DATAREADER
+{
+ char fileName[50];
+ long partialSize;
+ long totalSize;
+ int curPage;
+ long offsets[12]; // For each 100 records
+};
+
+typedef struct DATAREADER DATAINFO;
+
 #if defined(__TINY__) || defined(__SMALL__) || defined(__MEDIUM__)
 
 #define memsize coreleft() - 1000
@@ -234,6 +245,7 @@ int setoflags(int col, int row, int display);
 void clearoflags(int col, int row, int display);
 void updateoflags(int col, int row, int display);
 void loadsheet(char *filename);
+void loadPage(int prevNext);
 int getcell(int *col, int *row);
 char *cellstring(int col, int row, int *color, int formatting);
 void writeprompt(char *prompt);
@@ -253,7 +265,7 @@ void diagnostics(void);
 
 char* readentire(char* fileName);
 int validatecsvfile(char* fileName);
-void loadcsvfile(char* fileName);
+void loadcsvfile(char* fileName, int);
 void savecsvfile(char* fileName);
 char finddelimiter(char *sheetheader, int *count);
 void loadturbofile(int file);
@@ -261,10 +273,15 @@ void saveturbofile(int file);
 
 char* trimdecimals(char *buff);
 char* trim(char *buff);
+char* trimChars(char *buff, char *chars);
+char* trimJunk(char *buff);
+char* trimCharsRight(char *buff, char *chars);
+char* trimJunkRight(char *buff);
 char* doubletostr(double fv);
 
 #if !defined(MAIN)
 
+extern DATAINFO di;
 extern CELLPTR cell[MAXCOLS][MAXROWS], curcell;
 extern unsigned char format[MAXCOLS];
 extern unsigned char colwidth[MAXCOLS];
@@ -274,7 +291,7 @@ extern char formdisplay;
 extern char changed;
 extern char autocalc;
 extern int leftcol, rightcol, toprow, bottomrow, curcol, currow, lastcol,
- lastrow, direction;
+ lastrow, atbottom, attop;
 extern long memleft;
 extern char stop;
 extern char matherror;
