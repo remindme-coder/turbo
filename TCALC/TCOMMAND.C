@@ -216,21 +216,21 @@ void clearsheet(int keepFile)
  setrightcol();
  setbottomrow();
  displayscreen(NOUPDATE);
- printfreemem();
+ if(!keepFile) printfreemem();
  changed = FALSE;
 } /* clearsheet */
 
 void loadPage(int prevNext /*-1 is prev, +1 is next, 0 curr*/)
 {
-  clearsheet(1);
-  writef(1, 25, WHITE, 79, MSGLOADING);
+  clearsheet(TRUE/*same file*/);
+  writet(1, 25, WHITE, MSGLOADING);
   loadcsvfile(sheetname, prevNext);
   printfreemem();
  
   curcol = currow = 0;
   setrightcol();
   //displayscreen(NOUPDATE);
-  writef(1, 25, WHITE, 79, "");
+  writet(1, 25, WHITE, "");
   gotoxy(1, 25);
 }
 
@@ -265,8 +265,8 @@ void loadsheet(char *filename)
   valid = validatecsvfile(filename);
   
   if(valid == 1) {
-    clearsheet(0);
-    writef(1, 25, WHITE, 79, MSGLOADING);
+    clearsheet(FALSE);
+    writet(1, 25, WHITE, MSGLOADING);
     loadcsvfile(filename, 0);
   }
   else {
@@ -283,9 +283,9 @@ void loadsheet(char *filename)
    close(file);
    return;
   }
-  writef(1, 25, PROMPTCOLOR, 79, MSGLOADING);
+  writet(1, 25, PROMPTCOLOR, MSGLOADING);
   gotoxy(strlen(MSGLOADING) + 1, 25);
-  clearsheet(0);
+  clearsheet(FALSE);
 
   loadturbofile(file);
   close(file);
@@ -299,7 +299,7 @@ void loadsheet(char *filename)
  curcol = currow = 0;
  setrightcol();
  displayscreen(NOUPDATE);
- writef(1, 25, WHITE, 79, "");
+ writet(1, 25, WHITE, "");
  gotoxy(1, 25);
  
  changed = FALSE;
@@ -382,7 +382,7 @@ void savesheet(void)
   else              errormsg(MSGNOOPEN);
   return;
  }
- writef(1, 25, PROMPTCOLOR, 79, MSGSAVING);
+ writet(1, 25, PROMPTCOLOR, MSGSAVING);
  gotoxy(strlen(MSGSAVING) + 1, 25);
  
  if( strstr( strupr(filename), ".CSV" ) ){
@@ -824,7 +824,7 @@ void smenu(void)
    break;
   case 3 :
    checkforsave();
-   clearsheet(0);
+   clearsheet(FALSE);
    break;
  } /* switch */
 } /* smenu */

@@ -16,6 +16,19 @@ void setcolor(int color)
   textattr(colortable[color]);
 } /* setcolor */
 
+void writet(int col, int row, int color, char *s)
+/* Prints a raw text in video memory at a selected location in a color */
+{
+ char output[81];
+ int len, width=79;
+ blankOut(output, 81);
+ if(strlen(s)>0)  memcpy(output, s, strlen(s));
+ output[width] = 0;
+ setcolor(color);
+ gotoxy(col, row);
+ cputs(output);
+} 
+
 void writef(int col, int row, int color, int width, char *format, ...)
 /* Prints a string in video memory at a selected location in a color */
 {
@@ -30,9 +43,10 @@ void writef(int col, int row, int color, int width, char *format, ...)
  } else {
   strcpy(output, format);
  }
- output[width] = 0;
  if ((len = strlen(output)) < width)
   setmem(&output[len], width - len, ' ');
+ output[width] = 0;
+
  setcolor(color);
  gotoxy(col, row);
  cputs(output);

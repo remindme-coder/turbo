@@ -25,6 +25,7 @@ char colorcard;
 char snow;
 char far *displayptr;
 long memleft;
+long memgrid = 0;
 unsigned int oldcursor, shortcursor, tallcursor, nocursor = 0x2000;
 
 void run()

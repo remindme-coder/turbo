@@ -196,7 +196,7 @@ char finddelimiter(char *sheetheader, int *count){
 }
 
 void findcolumformat(char *sheetheader){
-   int length = strlen(sheetheader), colinx=0, i, scrptinx = 0, skip = 0, scrptlen, proplen;
+   int length = strlen(sheetheader), colinx=0, i, scrptinx = 0, skip = 0, scrptlen, proplen, accumlen = 0;
    char fmt[25] = "",wdth[15], *pos1, *pos2;
    //trace(NULL);
    
@@ -229,6 +229,7 @@ void findcolumformat(char *sheetheader){
                memcpy( wdth, pos1, proplen );
                wdth[proplen] = '\0';// eliminate rest
 
+               accumlen += atoi(wdth) - colwidth[colinx];
                colwidth[colinx] = atoi(wdth);// column width identified
             }
 
@@ -244,9 +245,16 @@ void findcolumformat(char *sheetheader){
 
       if( sheetheader[i] == delimiter ) {
          colinx++; 
+         colstart[colinx] += accumlen;
          format[colinx] = DEFAULTFORMAT;
       }
       i++;
+   }
+
+   colinx++;
+   while(colinx < 10) {
+      colstart[colinx] += accumlen;
+      colinx++;
    }
 }
 
@@ -256,8 +264,8 @@ int validatecsvfile(char* filename){
    int i = 0,j=0, length, dcount[3], chcount[3], wdth=0, overflo=0;
    //trace(NULL);
 
-   if( buffSize > memleft ) {
-      sprintf(temp,"Buff = %ld, MemLeft = %ld", buffSize, memleft);
+   if( memleft < 2 * 1024 ) {
+      //sprintf(temp,"Buff = %ld, MemLeft = %ld", buffSize, memleft);
       //trace( temp );
 
       return -1; // maximum file size limitation
@@ -324,11 +332,18 @@ int validatecsvfile(char* filename){
 
 void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/){
    int i=0, j=0, maxJ=0, allocated, len, dummy,last = FALSE, fin = FALSE;
+   long totalSize = filesize(fileName), tempMem;
    struct CELLREC rec;
    char *ptr,*prevPtr,*temp, delim[2] = ";", debug[25];
    char record[MAXROWCHARS];
-   char* doc = readEntire(fileName);
-   
+   char* doc = NULL;
+
+   logmsg( "file : %s, size: %ld", fileName, totalSize);
+   if(totalSize > 3 * 1024 /* 3KB */ )
+      doc = readPartial(fileName, prevNext );
+   else
+      doc = readEntire(fileName);
+
    // If the doc contains no data
    if(!doc || strlen(doc) == 0) return;
    
@@ -348,6 +363,7 @@ void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/
       logmsg( "column count : %d", delimCount+1);
    }
    strset(delim, delimiter);
+   tempMem = memleft ;
 
    do {
       if(len > 0){
@@ -425,7 +441,7 @@ void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/
       }
    } while( !fin );
    //free(doc);
-   
+   memgrid = tempMem - memleft ;
 }
 
 /* Saves the current spreadsheet */

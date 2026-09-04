@@ -31,7 +31,7 @@ int editstring(char *s, char *legal, int maxlength)
  changecursor(insert);
  do
  {
-  writef(1, 25, WHITE, 79, "%s", s);
+  writet(1, 25, WHITE, s);
   gotoxy(pos + 1, 25);
   switch(c = getkey())
   {

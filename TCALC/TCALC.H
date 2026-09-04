@@ -201,6 +201,7 @@ void scroll(int direction, int lines, int x1, int y1, int x2, int y2,
             int attrib);
 void setcursor(unsigned int shape);
 void writef(int col, int row, int color, int width, char *format, ...);
+void writet(int col, int row, int color, char *s);
 void printcol(void);
 void printrow(void);
 void displaycell(int col, int row, int highlighting, int updating);
@@ -271,6 +272,7 @@ char finddelimiter(char *sheetheader, int *count);
 void loadturbofile(int file);
 void saveturbofile(int file);
 
+char* blankOut(char *buff, int len);
 char* trimdecimals(char *buff);
 char* trim(char *buff);
 char* trimChars(char *buff, char *chars);
@@ -293,6 +295,7 @@ extern char autocalc;
 extern int leftcol, rightcol, toprow, bottomrow, curcol, currow, lastcol,
  lastrow, atbottom, attop;
 extern long memleft;
+extern long memgrid;
 extern char stop;
 extern char matherror;
 extern unsigned int oldcursor, shortcursor, tallcursor, nocursor;

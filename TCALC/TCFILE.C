@@ -66,6 +66,10 @@ int writeDebugLog(char* data)
    return 0;
 }
 
+long reusableFileMem() {
+   return (book? sizeof(book):0L);
+}
+
 long filesize(char* fileName)
 {
    long curpos, length;
@@ -79,31 +83,49 @@ long filesize(char* fileName)
    return length;
 }
 
-long lineAtPos(FILE *stream,long apprxPos, char* line){
+long lineAtPos(FILE *stream,long apprxPos, long totalSize, char* line){
    char tmp[MAXROWCHARS], *ptr, *ptr2;
-   int i,exact,left,right ;
-   long orig;
+   int i,exact,left,right, lastI, range = 0 ;
+   long orig = ftell(stream);
+
+   if(totalSize <= MAXROWCHARS) {
+      blankOut(tmp, MAXROWCHARS);
+
+      fseek(stream, 0L, SEEK_SET);
+      fread(tmp,sizeof(char),totalSize,stream);
+      trim(tmp);
+      lastI = i = 0;
+      while( i < (strlen(tmp) - (totalSize - apprxPos)) ) { 
+         if(isprint(tmp[i])) lastI = i; 
+         i++;
+      }
+      i = exact = lastI;
+   } else {
+      if(apprxPos == totalSize) apprxPos -= 10; // Adjustment : for last line
+
+      // RANGE : (-255 to +255 characters)
+      range = apprxPos > (MAXROWCHARS/2) ? (MAXROWCHARS/2) : apprxPos;
+
+      fseek(stream, apprxPos-range, SEEK_SET);
+      fread(tmp,sizeof(char),MAXROWCHARS,stream);
+      i = exact = (range - 1);
+   }
    
-   orig = ftell(stream);
-   fseek(stream, apprxPos-(MAXROWCHARS/2), SEEK_SET);
-   fread(tmp,sizeof(char),MAXROWCHARS,stream);
-   
-   i = exact = (MAXROWCHARS/2 - 1);
-   //logmsg("Extraction step 1) %ld line:%s\n", apprxPos-(MAXROWCHARS/2), tmp);
+   //logmsg("Extraction step 1) %ld, index:%d, line:%s\n", apprxPos-range,i, tmp);
    
    // Navigate to beginning of line from apprxpos
    while( isprint( tmp[i] )  && i > 0 )i--;
    left = exact - i ;
 
-   strset(tmp, ' ');
+   blankOut(tmp, MAXROWCHARS);
    fseek(stream, apprxPos-left, SEEK_SET);
    fread(tmp,sizeof(char),MAXROWCHARS,stream);
    trim(tmp);
    //logmsg("Extraction step 2) %ld,%d line:%s\n", apprxPos-left, left, tmp);
 
-   // Adjustment : The line should contain atleast 5 chars. If not, skip!!!
+   // Adjustment : The line should contain atleast 3 chars. If not, skip!!!
    ptr = strchr(tmp, '\n');
-   if( (ptr - &tmp[0]) > 5 ) ptr = &tmp[0]; 
+   if( (ptr - &tmp[0]) > 3 ) ptr = &tmp[0]; 
    while( iscntrl(ptr[0]) || isspace(ptr[0]) ) ptr++;
    
    if( strchr(ptr, '\n') ){
@@ -121,7 +143,7 @@ long lineAtPos(FILE *stream,long apprxPos, char* line){
    // Find the exact end-of-line Position
    apprxPos = (apprxPos-left) + (ptr2-&tmp[0]);
    trimJunk(line);
-   logmsg("Extracted line:%s\n", line);
+   //logmsg("Extracted line:%s\n", line);
 
    fseek(stream, orig, SEEK_SET);
    return apprxPos;
@@ -221,16 +243,20 @@ char* readEntire(char* fileName){
    readSize = bookSZ;
    if(totalSize > readSize)   bookSZ = readSize = totalSize;
 
-   if(!book)	book = (char*)calloc(readSize,sizeof(char));
-   else 		book = (char*)realloc(book, readSize);
+   if(totalSize < 1 * 1024 ){
+      if(!book)	book = (char*)malloc(readSize);
+      else 		book = (char*)realloc(book, readSize);
+   } else {
+      if(!book)	book = (char*)calloc(readSize, sizeof(char));
+      else 		book = (char*)realloc(book, readSize);
+   }
 
    stream = fopen(fileName,"r");
    if(stream){
       fread(book,sizeof(char),totalSize,stream);
       curpos = ftell(stream);
 
-      // Adjustment: Move 10 chars from end, Since there is no line at EOF and eliminate junkies
-      curpos = lineAtPos(stream, curpos-10, lastLine);
+      curpos = lineAtPos(stream, curpos, totalSize, lastLine);
       lastPtr = (strlen(lastLine) > 0) ? lastLineInChunk(book, lastLine) : NULL;
 
       if(lastPtr){
@@ -253,7 +279,7 @@ char* readPartial(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*
    int lines = 0, i, reallocations=0, charCount, endReach=0,iter=0, maxIterations=50, tmpLen, pageNo =0 ;
 
    totalSize = filesize(fileName);
-   logmsg("file:%s, page:%d \n",fileName, prevNext);
+   logmsg("file:%s, di.FileName:%s, page:%d \n",fileName, di.fileName, prevNext);
    if((di.curPage <= 1 && prevNext == -1) || (di.offsets[di.curPage] == totalSize && prevNext == 1) ) 
       return NULL;   
 
@@ -305,8 +331,7 @@ char* readPartial(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*
 	   fseek(stream, offsetA, SEEK_SET);
       fread(book,sizeof(char),readSize,stream);
       actPos = ftell((FILE*)stream);
-      curpos = (actPos == totalSize) ? (actPos - 10) : actPos;// Adjustment: Since there is no line at EOF
-      curpos = lineAtPos(stream, curpos, lastLine);
+      curpos = lineAtPos(stream, actPos, totalSize, lastLine);
 
       logmsg( "Last Line at Pos %ld : %s\n", curpos, lastLine );
       lastPtr = (strlen(lastLine) > 0) ? lastLineInChunk(book, lastLine) : NULL;
@@ -413,6 +438,7 @@ char* readPartial(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*
     di.partialSize = partialSize;
     di.offsets[pageNo - 1] = offsetA ;
     di.offsets[pageNo] = offsetB ;
+    strcpy(di.fileName, fileName);
 
     return book;
 }

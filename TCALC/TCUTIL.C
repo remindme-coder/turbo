@@ -9,6 +9,11 @@
 #include <stdio.h>
 #include <conio.h>
 #include "tcalc.h"
+#include "tcfile.h"
+
+long reusableGridMem() {
+  return memgrid;
+}
 
 int alloctext(int col, int row, char *s)
 /* Allocates space for a text cell */
@@ -92,7 +97,7 @@ void deletecell(int col, int row, int display)
 void printfreemem(void)
 /* Prints the amount of free memory */
 {
- memleft = coreleft();
+ memleft = coreleft() + reusableFileMem() + reusableGridMem() ;
  writef(strlen(MSGMEMORY) + 2, 1, MEMORYCOLOR, 6, "%6ld", memleft);
 } /* printfreemem */
 
@@ -147,19 +152,19 @@ void errormsg(char *s)
  gotoxy(strlen(s) + strlen(MSGKEYPRESS) + 3, 25);
  getkey();
  gotoxy(1, 25);
- writef(1, 25, WHITE, 79, "");
+ writet(1, 25, WHITE, "");
 } /* errormsg */
 
 void successmsg(char *s)
 /* Prints a success message at the bottom of the screen */
 {
  printf("%c", 7);      /* Beeps the speaker */
- writef(1, 25, SUCCESSCOLOR, 79, "%s", s);
- writef(1, 24, WHITE, 79, "");
+ writet(1, 25, SUCCESSCOLOR, s);
+ writet(1, 24, WHITE, "");
  gotoxy(strlen(s) + strlen(MSGKEYPRESS) + 3, 25);
  getkey();
  gotoxy(1, 25);
- writef(1, 25, WHITE, 79, "");
+ writet(1, 25, WHITE, "");
 } /* successmsg */
 
 void fixformula(int col, int row, int action, int place)
@@ -589,7 +594,7 @@ char *cellstring(int col, int row, int *color, int formatting)
 void writeprompt(char *prompt)
 /* Prints a prompt on the screen */
 {
- writef(1, 24, PROMPTCOLOR, 80, prompt);
+ writet(1, 24, PROMPTCOLOR, prompt);
 } /* writeprompt */
 
 void swap(int *val1, int *val2)
@@ -619,7 +624,11 @@ char* removewords(char *buff){
 
   return buff;
 }
-
+char* blankOut(char *buff, int len){
+  setmem(buff, len, ' ');
+  buff[len] = 0;
+  return buff;
+}
 char* trimdecimals(char *buff){
   char *pos;
   int length;
@@ -783,7 +792,7 @@ void diagnostics(void)
  long memdata = coreleft();
 
  writef(1, 24, LOWCOMMANDCOLOR, 79, "core memory available :%ld",  memdata  );
- memleft = memdata;
+ 
  printfreemem();
  ch = toupper(getkey());
 
