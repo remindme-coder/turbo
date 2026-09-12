@@ -222,6 +222,11 @@ void clearsheet(int keepFile)
 
 void loadPage(int prevNext /*-1 is prev, +1 is next, 0 curr*/)
 {
+  if(changed){
+    changed = FALSE;
+    writet(1, 25, WHITE, MSGSAVING);
+    savepage();
+  }
   clearsheet(TRUE/*same file*/);
   writet(1, 25, WHITE, MSGLOADING);
   loadcsvfile(sheetname, prevNext);
@@ -375,21 +380,21 @@ void savesheet(void)
   strcpy(filename , sheetname); 
  }
  
- if ((file = open(filename, O_RDWR | O_CREAT | O_TRUNC | O_BINARY,
-  S_IREAD | S_IWRITE)) == -1)
- {
-  if(newfile == 1)  errormsg(MSGNOCREATE);
-  else              errormsg(MSGNOOPEN);
-  return;
- }
  writet(1, 25, PROMPTCOLOR, MSGSAVING);
  gotoxy(strlen(MSGSAVING) + 1, 25);
  
  if( strstr( strupr(filename), ".CSV" ) ){
-  close(file);
-  
-  savecsvfile(filename);
+  if(isPagePresent(0)) savepage();
+  else  savecsvfile(filename, TRUE);
  } else {
+  if ((file = open(filename, O_RDWR | O_CREAT | O_TRUNC | O_BINARY,
+   S_IREAD | S_IWRITE)) == -1)
+  {
+   if(newfile == 1)  errormsg(MSGNOCREATE);
+   else              errormsg(MSGNOOPEN);
+   return;
+  }
+
   saveturbofile(file);
   close(file);
  }

@@ -650,7 +650,7 @@ char* trimCharsRight(char *buff, char *chars){
 
   // Lets discard junkies present at the end
   i=0;
-  while( i<strlen(buff) && ( isprint(buff[i]) ||  iscntrl(buff[i]) )) {  i++;  }
+  while( i<strlen(buff) && ( isprint(buff[i]) ||  (iscntrl(buff[i]) && (buff[i]=='\r'||buff[i]=='\n'))  )) {  i++;  }
   if( i<strlen(buff) ) buff[i] = 0;
 
   // reverse trim

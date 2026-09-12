@@ -7,4 +7,5 @@ long lineAtPos(FILE *stream,long apprxPos, long totalSize, char* line);
 int isPagePresent(int prevNext);
 char* readSanity(char* filename, long totalSize);
 char* readEntire(char* fileName);
-char* readPartial(char* fileName, int prevNext  );
+char* readPartial(char* fileName, int prevNext, long* nxtOffset  );
+void writePartial(char* fileName,char* data ,long offset, long nxtOffset, long* newOffset /*New next offset*/);

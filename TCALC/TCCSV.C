@@ -332,7 +332,7 @@ int validatecsvfile(char* filename){
 
 void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/){
    int i=0, j=0, maxJ=0, allocated, len, dummy,last = FALSE, fin = FALSE;
-   long totalSize = filesize(fileName), tempMem;
+   long totalSize = filesize(fileName), tempMem, nxtOffset;
    struct CELLREC rec;
    char *ptr,*prevPtr,*temp, delim[2] = ";", debug[25];
    char record[MAXROWCHARS];
@@ -340,7 +340,7 @@ void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/
 
    logmsg( "file : %s, size: %ld", fileName, totalSize);
    if(totalSize > 3 * 1024 /* 3KB */ )
-      doc = readPartial(fileName, prevNext );
+      doc = readPartial(fileName, prevNext, &nxtOffset );
    else
       doc = readEntire(fileName);
 
@@ -444,11 +444,23 @@ void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/
    memgrid = tempMem - memleft ;
 }
 
+void savepage()
+{
+   char *bookPtr,tmp[15]="tctmp.tmp";
+   int page;
+   long newOffset;
+
+   savecsvfile(tmp, FALSE);
+   page = di.curPage;
+   writePartial(di.fileName, tmp , di.offsets[page-1], di.offsets[page], &newOffset );
+   di.offsets[page] = newOffset;
+}
+
 /* Saves the current spreadsheet */
-void savecsvfile(char* fileName)
+void savecsvfile(char* fileName, int inclHeader)
 {
   char record[MAXROWCHARS] ="",dataBuff[MAXVALCHARS] = "", delim[2]=";",finfo[15] = "", temp[15]="";
-  int col, row, overwrite, file;
+  int col, row, start = 0, overwrite, file;
   CELLPTR cellptr;
   FILE *stream;
   int rows = lastrow, cols = lastcol;
@@ -458,50 +470,53 @@ void savecsvfile(char* fileName)
 
   stream = fopen(fileName, "w+");
 
-  /* header */
-  strcpy(record , "");
-  for (col = 0; col <= cols; col++)
-  {
-   cellptr = cell[col][0];
-   if (cellptr != NULL)
+  if(inclHeader == TRUE){
+   /* header */
+   strcpy(record , "");
+   for (col = 0; col <= cols; col++)
    {
-    strcpy(finfo,"");
-    strcpy(dataBuff,cellptr->v.text);
+      cellptr = cell[col][0];
+      if (cellptr != NULL)
+      {
+      strcpy(finfo,"");
+      strcpy(dataBuff,cellptr->v.text);
 
-    if(strlen(dataBuff)==0) {
-      strcpy(dataBuff, doubletostr(cellptr->v.value));
-      strcat(record, dataBuff);
-    }
-    else if(strchr(dataBuff, delimiter)) {
-      strcat(record, "\"" );
-      strcat(record, dataBuff );
-      strcat(record, "\"" );
-    } 
-    else strcat(record, dataBuff );
-    
-    if( format[col]&DOLLAR) {
-      strcat(finfo, "f:$");
-    }
-    else if( format[col] == 0 ) {
-      strcat(finfo, "f:L"); //justify-left
-    }
-    if( colwidth[col] != DEFAULTWIDTH ) {
-      sprintf(temp, "w:%d", colwidth[col]);
-      if(strlen(finfo) > 0) strcat(strcat(finfo, ","), temp);
-      else                  strcpy(finfo, temp);
-    }
-    if(strlen(finfo) > 0) {
-      sprintf(temp, "{%s}", finfo);
-      strcat(record, temp);
-    }
+      if(strlen(dataBuff)==0) {
+         strcpy(dataBuff, doubletostr(cellptr->v.value));
+         strcat(record, dataBuff);
+      }
+      else if(strchr(dataBuff, delimiter)) {
+         strcat(record, "\"" );
+         strcat(record, dataBuff );
+         strcat(record, "\"" );
+      } 
+      else strcat(record, dataBuff );
+      
+      if( format[col]&DOLLAR) {
+         strcat(finfo, "f:$");
+      }
+      else if( format[col] == 0 ) {
+         strcat(finfo, "f:L"); //justify-left
+      }
+      if( colwidth[col] != DEFAULTWIDTH ) {
+         sprintf(temp, "w:%d", colwidth[col]);
+         if(strlen(finfo) > 0) strcat(strcat(finfo, ","), temp);
+         else                  strcpy(finfo, temp);
+      }
+      if(strlen(finfo) > 0) {
+         sprintf(temp, "{%s}", finfo);
+         strcat(record, temp);
+      }
+      }
+      if(col < cols) strcat(record, delim);
    }
-   if(col < cols) strcat(record, delim);
+   strcat(record, "\n");
+   fwrite(record, strlen(record), 1, stream);
+   start = 1;
   }
-  strcat(record, "\n");
-  fwrite(record, strlen(record), 1, stream);
 
   /* actual data */
-  for (row = 1; row <= rows; row++)
+  for (row = start; row <= rows; row++)
   {
    strcpy(record , "");
 
@@ -531,7 +546,7 @@ void savecsvfile(char* fileName)
     }
     if(col < cols) strcat(record, delim);
    }
-   if(row < rows) strcat(record, "\n");
+   strcat(record, "\n");
 
    // Write the record
    fwrite(record, strlen(record), 1, stream);

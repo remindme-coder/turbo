@@ -20,10 +20,10 @@ void writet(int col, int row, int color, char *s)
 /* Prints a raw text in video memory at a selected location in a color */
 {
  char output[81];
- int len, width=79;
- blankOut(output, 81);
+ int len;
+ blankOut(output, 80);
  if(strlen(s)>0)  memcpy(output, s, strlen(s));
- output[width] = 0;
+ output[79] = 0;
  setcolor(color);
  gotoxy(col, row);
  cputs(output);
