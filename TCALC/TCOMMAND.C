@@ -741,6 +741,9 @@ void deleterow(int row)
     sizeof(CELLPTR) * (MAXROWS - row - 1));
    //movmem(&format[counter][row + 1], &format[counter][row], MAXROWS - row - 1);
   }
+  if(isPagePresent(1)) {
+    borrowLine(1);
+  }
  }
  else
  {
@@ -749,9 +752,13 @@ void deleterow(int row)
    cell[counter][MAXROWS - 1] = NULL;
    //format[counter][MAXROWS - 1] = DEFAULTFORMAT;
   }
+  if(isPagePresent(1)) {
+    lastrow++;
+    borrowLine(1);
+  }
  }
- if ((lastrow >= row) && (lastrow > 0))
-  lastrow--;
+ setlastrow();
+ 
  for (counter = 0; counter <= lastcol; counter++)
  {
   for (rowc = 0; rowc <= lastrow; rowc++)
@@ -771,9 +778,13 @@ void insertrow(int row)
 /* Inserts a row */
 {
  int counter, rowc;
-
+ long offset, prevPos;
+ 
  if (lastrow == MAXROWS - 1)
  {
+  if(changed) savepage(); // Make sure all the data saved.
+  borrowLine(-1);
+
   for (counter = 0; counter <= lastcol; counter++)
    deletecell(counter, lastrow, NOUPDATE);
   printfreemem();

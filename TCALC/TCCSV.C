@@ -330,11 +330,72 @@ int validatecsvfile(char* filename){
    return 1;
 }
 
-void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/){
-   int i=0, j=0, maxJ=0, allocated, len, dummy,last = FALSE, fin = FALSE;
-   long totalSize = filesize(fileName), tempMem, nxtOffset;
+
+int loadcsvalue(char* record, int i  ) {
+   char *temp, delim[2] = ";";
+   int j=0, allocated, dummy, row, col;
    struct CELLREC rec;
-   char *ptr,*prevPtr,*temp, delim[2] = ";", debug[25];
+
+   // Validate
+   if(!record || strlen(record)==0) return 1;
+   insertspace(record);
+
+   // Split column-wise
+   strset(delim, delimiter);
+   j=0;
+   temp = strtok(record, delim);
+   temp = trim(temp);
+   row = i;
+
+   do{
+      rec.attrib = attribtype(temp);
+      col = j;
+      
+      switch (rec.attrib)
+      {
+      case TEXT :
+      if(strchr(temp,'*')) unmaskcell(temp);
+      strcpy(rec.v.text, temp );
+      if ((allocated = alloctext(col, row, rec.v.text)) == TRUE)
+         setoflags(col, row, NOUPDATE);
+      break;
+      case VALUE :
+      rec.v.value = atof(temp);
+      allocated = allocvalue(col, row, rec.v.value);
+      break;
+      case FORMULA :
+      strcpy(rec.v.f.formula, temp);
+      rec.v.f.fvalue = parse(rec.v.f.formula, &dummy);
+      allocated = allocformula(col, row, rec.v.f.formula, rec.v.f.fvalue);
+      break;
+      }
+
+      lastrow = row;
+      lastcol = col;
+      if (!allocated)
+      {
+      errormsg(MSGFILELOMEM);
+      if(col == 0) {
+         lastrow = row-1;
+      }
+      break;
+      }
+
+      // Next field in the row
+      temp = strtok(NULL, delim);
+      j++;
+   } while (temp != NULL);
+
+   // Global variable curcol
+   if(curcol < j-1) curcol = j-1;
+
+   return allocated;
+}
+
+void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/){
+   int i=0, j, allocated, len,last = FALSE, fin = FALSE;
+   long totalSize = filesize(fileName), tempMem, nxtOffset;
+   char *ptr,*prevPtr,*temp, debug[25];
    char record[MAXROWCHARS];
    char* doc = NULL;
 
@@ -362,62 +423,14 @@ void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/
       findcolumformat(record);
       logmsg( "column count : %d", delimCount+1);
    }
-   strset(delim, delimiter);
    tempMem = memleft ;
 
    do {
       if(len > 0){
-         insertspace(record);
-
-         // Split column-wise
-         j=0;
-         temp = strtok(record, delim);
-         temp = trim(temp);
+         allocated = loadcsvalue(record, i);
          currow = i;
-
-         do{
-            rec.attrib = attribtype(temp);
-            curcol = j;
-            
-            switch (rec.attrib)
-            {
-            case TEXT :
-            if(strchr(temp,'*')) unmaskcell(temp);
-            strcpy(rec.v.text, temp );
-            if ((allocated = alloctext(curcol, currow, rec.v.text)) == TRUE)
-               setoflags(curcol, currow, NOUPDATE);
-            break;
-            case VALUE :
-            rec.v.value = atof(temp);
-            allocated = allocvalue(curcol, currow, rec.v.value);
-            break;
-            case FORMULA :
-            strcpy(rec.v.f.formula, temp);
-            rec.v.f.fvalue = parse(rec.v.f.formula, &dummy);
-            allocated = allocformula(curcol, currow, rec.v.f.formula, rec.v.f.fvalue);
-            break;
-            }
-
-            lastrow = currow;
-            lastcol = curcol;
-            if (!allocated)
-            {
-            errormsg(MSGFILELOMEM);
-            if(curcol == 0) {
-               lastrow = currow-1;
-               lastcol = maxJ;
-            }
-            break;
-            }
-
-            // Next field in the row
-            temp = strtok(NULL, delim);
-            j++;
-         } while (temp != NULL);
-
          if (!allocated) break; // allocation didn't happen
-         if(maxJ < j-1) maxJ = j-1;
-         i++;
+         if (!last) i++;
       }
 
       if(!last){
@@ -436,24 +449,65 @@ void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/
          //logmsg( "Rec is : %s\n", record);
       } else {
          fin = TRUE;
-         lastrow = currow;
-         lastcol = maxJ;
+         lastrow = i;
+         lastcol = curcol;
       }
-   } while( !fin );
+   } while( !fin && currow < (MAXROWS - 1) );
    //free(doc);
    memgrid = tempMem - memleft ;
 }
+
+void borrowLine(int direction) {
+   int ro,col;
+   char line[MAXROWCHARS];
+   long prevPos,offset;
+   long totalSZ = di.totalSize;
+   FILE *stream = fopen(di.fileName,"r");
+   offset = di.offsets[di.curPage];
+
+   if(direction < 0) {
+      // Indicates INSERT
+      di.hasNewRow = 1;
+      
+   } else if(direction > 0) {
+      if(lastrow == (MAXROWS-1)) {
+         // Indicates DELETE
+         offset += 3; // Adjustment
+         lineAtPos(stream, offset, totalSZ, line, &prevPos,&offset );
+         di.offsets[di.curPage] = offset;
+
+         ro = currow; col = curcol;
+         loadcsvalue(line, lastrow);
+         currow = ro; curcol = col;
+      }
+   }
+   fclose(stream);
+}
+
 
 void savepage()
 {
    char *bookPtr,tmp[15]="tctmp.tmp";
    int page;
-   long newOffset;
+   long newOffset, prevPos, offset;
+   FILE *stream;
+   page = di.curPage;
+
+   if(di.hasNewRow) {
+     di.hasNewRow = 0;
+     offset = di.offsets[di.curPage];
+     stream = fopen(di.fileName,"r");
+     lineAtPos(stream, offset - 3, di.totalSize, NULL, &prevPos, &offset);// Adjustment : 3 chars
+     di.offsets[di.curPage] = prevPos;
+     di.offsets[di.curPage+1] = di.totalSize;
+     fclose(stream);
+   }
 
    savecsvfile(tmp, FALSE);
-   page = di.curPage;
+   
    writePartial(di.fileName, tmp , di.offsets[page-1], di.offsets[page], &newOffset );
    di.offsets[page] = newOffset;
+   di.totalSize = filesize(di.fileName);
 }
 
 /* Saves the current spreadsheet */

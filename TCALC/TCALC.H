@@ -143,6 +143,7 @@ struct DATAREADER
  long partialSize;
  long totalSize;
  int curPage;
+ int hasNewRow;
  long offsets[12]; // For each 100 records
 };
 
@@ -266,6 +267,7 @@ void diagnostics(void);
 
 char* readentire(char* fileName);
 int validatecsvfile(char* fileName);
+void borrowLine(int direction);
 void loadcsvfile(char* fileName, int);
 void savecsvfile(char* fileName, int inclHeader);
 void savepage();

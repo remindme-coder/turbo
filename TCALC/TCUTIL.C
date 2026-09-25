@@ -594,7 +594,7 @@ char *cellstring(int col, int row, int *color, int formatting)
 void writeprompt(char *prompt)
 /* Prints a prompt on the screen */
 {
- writet(1, 24, PROMPTCOLOR, prompt);
+ writef(1, 24, PROMPTCOLOR, 80, prompt);
 } /* writeprompt */
 
 void swap(int *val1, int *val2)
