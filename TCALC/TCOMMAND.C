@@ -21,10 +21,13 @@ void moverowup(void)
   currow--;
  else if (toprow != 0)
  {
-  scroll(DOWN, 1, LEFTMARGIN + 1, 3, 80, SCREENROWS + 2, WHITE);
-  displayrow(--toprow, NOUPDATE);
+  scroll(DOWN, 1, LEFTMARGIN + 1, TOPMARGIN, 80, SCREENROWS + (TOPMARGIN-1), WHITE);
+  toprow--;
   currow--;
+  displayrow(toprow, NOUPDATE);
   setbottomrow();
+ } else if (toprow == currow) {
+  // TODO: Header row logic goes here
  }
 } /* moverowup */
 
@@ -34,9 +37,9 @@ void moverowdown(void)
  displaycell(curcol, currow, NOHIGHLIGHT, NOUPDATE);
  if (currow < bottomrow)
   currow++;
- else if (bottomrow < (MAXROWS - 1))
+ else if (currow < (MAXROWS - 1))
  {
-  scroll(UP, 1, LEFTMARGIN + 1, 3, 80, SCREENROWS + 2, WHITE);
+  scroll(UP, 1, LEFTMARGIN + 1, TOPMARGIN, 80, SCREENROWS + (TOPMARGIN-1), WHITE);
   toprow++;
   currow++;
   setbottomrow();
@@ -63,7 +66,7 @@ void movecolleft(void)
   setleftcol();
   if (oldleftcol <= rightcol)
    scroll(RIGHT, colstart[oldleftcol - leftcol] - LEFTMARGIN, LEFTMARGIN + 1,
-          3, 80, SCREENROWS + 2, WHITE);
+          TOPMARGIN, 80, SCREENROWS + (TOPMARGIN-1), WHITE);
   clearlastcol();
   for (col = leftcol; col <= oldleftcol - 1; col++)
    displaycol(col, NOUPDATE);

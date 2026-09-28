@@ -132,7 +132,7 @@ void clearlastcol()
  int col;
 
  if ((col = colstart[rightcol - leftcol] + colwidth[rightcol]) < 80)
-  scroll(UP, 0, col + 1, 3, 80, SCREENROWS + 2, WHITE);
+  scroll(UP, 0, col + 1, TOPMARGIN, 80, SCREENROWS + (TOPMARGIN-1), WHITE);
 } /* clearlastcol */
 
 void printrow(void)
@@ -142,7 +142,9 @@ void printrow(void)
  page = (di.curPage <= 1) ? 0 : di.curPage-1;
 
  for (row = 0; row < SCREENROWS; row++)
-  writef(1, row + 3, HEADERCOLOR, LEFTMARGIN, "%-d", row + toprow + 1 + (page * MAXROWS) );
+  writef(1, row + TOPMARGIN, HEADERCOLOR, LEFTMARGIN, "%-d", row + toprow + 1 + (page * MAXROWS) );
+
+  // TODO: Header row logic goes here
 } /* printrow */
 
 void displaycell(int col, int row, int highlighting, int updating)
@@ -162,7 +164,8 @@ void displaycell(int col, int row, int highlighting, int updating)
   else
    color = HIGHLIGHTCOLOR;
  }
- writef(colstart[col - leftcol] + 1, row - toprow + 3, color, colwidth[col],
+ // TODO: Header row logic goes here
+ writef(colstart[col - leftcol] + 1, row - toprow + TOPMARGIN, color, colwidth[col],
         "%s", s);
 } /* displaycell */
 
@@ -171,6 +174,7 @@ void displaycol(int col, int updating)
 {
  int row;
 
+ // TODO: Header row logic goes here
  for (row = toprow; row <= bottomrow; row++)
   displaycell(col, row, NOHIGHLIGHT, updating);
 } /* displaycol */

@@ -71,7 +71,7 @@
 #define DEFAULTFORMAT 0X42
 #define MAXINPUT 79
 #define MAXPLACES 8
-#define TOPMARGIN 5
+#define TOPMARGIN 3
 #define PARSERSTACKSIZE 20
 #define MEMPIT 50  /* Trailing space allocation */
 #define MAXROWCHARS 500

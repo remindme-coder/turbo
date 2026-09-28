@@ -58,14 +58,14 @@ void run()
     break;
    case PGUPKEY :
     atbottom = 0;
-    toprow -= 20;
-    currow -= 20;
+    toprow -= SCREENROWS;
+    currow -= SCREENROWS;
     if(attop && isPagePresent(-1)) {
       loadPage(-1);
       attop = 0;
       atbottom = 1;
       currow = MAXROWS - 1;
-      toprow = MAXROWS - 20;
+      toprow = MAXROWS - SCREENROWS;
     }
     if(currow <= 0 && toprow <= 0)       attop = 1;
     if (currow < 0)
@@ -80,8 +80,8 @@ void run()
     break;
    case PGDNKEY :
     attop = 0;
-    toprow += 20;
-    currow += 20;
+    toprow += SCREENROWS;
+    currow += SCREENROWS;
     if(atbottom && isPagePresent(+1)) {
       loadPage(+1);
       attop = 1;
@@ -90,14 +90,14 @@ void run()
     if ((currow >= MAXROWS) && (toprow >= MAXROWS))
     {
      currow = MAXROWS - 1;
-     toprow = MAXROWS - 20;
+     toprow = MAXROWS - SCREENROWS;
     }
-    else if (toprow > (MAXROWS - 20))
+    else if (toprow > (MAXROWS - SCREENROWS))
     {
-     currow -= (toprow + 20 - MAXROWS);
-     toprow = MAXROWS - 20;
+     currow -= (toprow + SCREENROWS - MAXROWS);
+     toprow = MAXROWS - SCREENROWS;
     }
-    if(toprow == (MAXROWS - 20) && currow == (MAXROWS-1))       atbottom = 1;
+    if(toprow == (MAXROWS - SCREENROWS) && currow == (MAXROWS-1))       atbottom = 1;
     setbottomrow();
     displayscreen(NOUPDATE);
     break;

@@ -315,8 +315,8 @@ void settoprow(void)
 /* Figures out the value of toprow based on the value of bottomrow */
 {
  if (bottomrow - SCREENROWS < -1)
-  bottomrow = 19;
- toprow = bottomrow - 19;
+  bottomrow = (SCREENROWS-1);
+ toprow = bottomrow - (SCREENROWS-1);
  printrow();
 } /* settoprow */
 
@@ -324,8 +324,8 @@ void setbottomrow(void)
 /* Figures out the value of bottomrow based on the value of toprow */
 {
  if (toprow + SCREENROWS > MAXROWS)
-  toprow = MAXROWS - 20;
- bottomrow = toprow + 19;
+  toprow = MAXROWS - SCREENROWS;
+ bottomrow = toprow + (SCREENROWS-1);
  printrow();
 } /* setbottomrow */
 
