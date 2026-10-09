@@ -1,0 +1,22 @@
+Fixes
+------------------------------------------------------------------------------------------------------------------------------------------------
+1. Include CSV editor changes
+2. Include Diagnostics
+3. Spreadsheet formatting based on header info.
+4. CSV validation based on first 3 rows.
+5. Data type identification based on CSV data
+6. Multi-paged spreadsheet
+	a. Display multiple pages
+	b. Read and write partial data from file
+	c. offset logic and corrections
+	d. Insert/Delete/Update fixes
+7. Reusable memory = Mem used for loading CSV + Grid Memory + Actual Memory left
+8. Static display of the header row
+	a. SCREENROW, TOPMARGIN parameters incorporation.
+
+Issues
+------------------------------------------------------------------------------------------------------------------------------------------------
+i. blankout data before calloc/realloc, this will avoid junk data 
+ii. after loading a buffer(initilize like buffer[readsize+1] ) make sure to call buffer[readsize] = 0
+iii. Avoid using strlen for huge volumes of data
+iv. Turn off logger to release builds by #ifdef

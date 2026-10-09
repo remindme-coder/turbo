@@ -141,10 +141,13 @@ void printrow(void)
  int row, page;
  page = (di.curPage <= 1) ? 0 : di.curPage-1;
 
+ // Header display
+ #if HEADERROW == 1 
+ writef(1, TOPMARGIN-HEADERROW, HEADERCOLOR, LEFTMARGIN, "   ");
+ #endif
+ 
  for (row = 0; row < SCREENROWS; row++)
   writef(1, row + TOPMARGIN, HEADERCOLOR, LEFTMARGIN, "%-d", row + toprow + 1 + (page * MAXROWS) );
-
-  // TODO: Header row logic goes here
 } /* printrow */
 
 void displaycell(int col, int row, int highlighting, int updating)
@@ -152,9 +155,10 @@ void displaycell(int col, int row, int highlighting, int updating)
 {
  int color;
  char *s;
+ CELLPTR cellPtr = (row<0) ? hcell[col] : cell[col][row];
 
  if ((updating) &&
-     ((cell[col][row] == NULL) || (cell[col][row]->attrib != FORMULA)))
+     ((cellPtr == NULL) || (cellPtr->attrib != FORMULA)))
   return;
  s = cellstring(col, row, &color, FORMAT);
  if (highlighting)
@@ -164,9 +168,8 @@ void displaycell(int col, int row, int highlighting, int updating)
   else
    color = HIGHLIGHTCOLOR;
  }
- // TODO: Header row logic goes here
- writef(colstart[col - leftcol] + 1, row - toprow + TOPMARGIN, color, colwidth[col],
-        "%s", s);
+ if(row<0)	writef(colstart[col - leftcol] + 1, TOPMARGIN - 1, color, colwidth[col], "%s", s);
+ else 		writef(colstart[col - leftcol] + 1, row - toprow + TOPMARGIN, color, colwidth[col], "%s", s);
 } /* displaycell */
 
 void displaycol(int col, int updating)
@@ -174,7 +177,11 @@ void displaycol(int col, int updating)
 {
  int row;
 
- // TODO: Header row logic goes here
+ // header
+ #if HEADERROW == 1 
+ displaycell(col, -1*HEADERROW, NOHIGHLIGHT, updating);
+ #endif
+ 
  for (row = toprow; row <= bottomrow; row++)
   displaycell(col, row, NOHIGHLIGHT, updating);
 } /* displaycol */
@@ -192,6 +199,11 @@ void displayscreen(int updating)
 /* Displays the current screen of the spreadsheet */
 {
  int row;
+ 
+ //header
+ #if HEADERROW == 1 
+ displayrow(-1*HEADERROW, updating);
+ #endif
 
  for (row = toprow; row <= bottomrow; row++)
   displayrow(row, updating);

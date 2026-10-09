@@ -330,6 +330,46 @@ int validatecsvfile(char* filename){
    return 1;
 }
 
+int loadcsheader(char* record  ) {
+   char *temp, delim[2] = ";";
+   int j=0, allocated;
+   struct CELLREC rec;
+
+   // Validate
+   if(!record || strlen(record)==0) return 1;
+   insertspace(record);
+
+   // Split column-wise
+   strset(delim, delimiter);
+   temp = strtok(record, delim);
+   temp = trim(temp);
+   j=0;
+
+   do{
+      rec.attrib = attribtype(temp);
+      if(strchr(temp,'*')) unmaskcell(temp);
+      strcpy(rec.v.text, temp );
+      allocated = alloctext(j, -1, rec.v.text);
+
+      lastcol = j;
+      if (!allocated)
+      {
+       errormsg(MSGFILELOMEM);
+       break;
+      } else {
+       //setoflags(j, row, NOUPDATE);
+      }
+
+      // Next field in the row
+      temp = strtok(NULL, delim);
+      j++;
+   } while (temp != NULL);
+
+   // Global variable curcol
+   if(curcol < j-1) curcol = j-1;
+
+   return allocated;
+}
 
 int loadcsvalue(char* record, int i  ) {
    char *temp, delim[2] = ";";
@@ -393,66 +433,56 @@ int loadcsvalue(char* record, int i  ) {
 }
 
 void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/){
-   int i=0, j, allocated, len,last = FALSE, fin = FALSE;
+   int i=0, j, allocated, len;
    long totalSize = filesize(fileName), tempMem, nxtOffset;
    char *ptr,*prevPtr,*temp, debug[25];
    char record[MAXROWCHARS];
    char* doc = NULL;
 
-   logmsg( "file : %s, size: %ld", fileName, totalSize);
    if(totalSize > 3 * 1024 /* 3KB */ )
-      doc = readPartial(fileName, prevNext, &nxtOffset );
+      doc = readPartial(fileName, prevNext, record, &nxtOffset );
    else
-      doc = readEntire(fileName);
+      doc = readEntire(fileName, record);
 
    // If the doc contains no data
    if(!doc || strlen(doc) == 0) return;
-   
-   // Split Row-wise starting from header
-   ptr = strchr(doc, '\n');
-   if(!ptr) strcpy(record, doc );
-   else {
-      len = (int)(ptr - doc);
-      memcpy( record, doc, len );
-      record[len] = 0;
-   }
 
    if(prevNext == 0){
       // Identify the delimiter from the sheet header
       delimiter = finddelimiter(record, &delimCount);
       findcolumformat(record);
-      logmsg( "column count : %d", delimCount+1);
+      logmsg( "column count : %d\n", delimCount+1);
+
+      allocated = loadcsheader(record);
    }
    tempMem = memleft ;
 
-   do {
+   ptr = doc;
+   while( ptr && i < MAXROWS ) {
+      prevPtr = ptr;
+      if(prevPtr[0]=='\n')prevPtr++;
+      ptr = strchr(prevPtr, '\n');
+      if(!ptr) {
+         strcpy(record, prevPtr );
+         len = strlen(prevPtr);
+         record[len] = 0;
+      }
+      else {
+         len = (int)(ptr - prevPtr);
+         memcpy( record, prevPtr, len );
+         record[len] = 0;
+      }
+      //logmsg( "Rec is : %s\n", record);
+
       if(len > 0){
          allocated = loadcsvalue(record, i);
          currow = i;
-         if (!allocated) break; // allocation didn't happen
-         if (!last) i++;
-      }
-
-      if(!last){
-         prevPtr = ptr;
-         prevPtr++;
-         ptr = strchr(prevPtr, '\n');
-         if(!ptr) {
-            strcpy(record, prevPtr );
-            last = TRUE;
-         }
-         else {
-            len = (int)(ptr - prevPtr);
-            memcpy( record, prevPtr, len );
-            record[len] = 0;
-         }
-         //logmsg( "Rec is : %s\n", record);
-      } else {
-         fin = TRUE;
          lastrow = i;
          lastcol = curcol;
+         if (!allocated) break; // allocation didn't happen
+         i++;
       }
-   } while( !fin && currow < (MAXROWS - 1) );
+   }
    //free(doc);
    memgrid = tempMem - memleft ;
 }
@@ -487,7 +517,7 @@ void borrowLine(int direction) {
 
 void savepage()
 {
-   char *bookPtr,tmp[15]="tctmp.tmp";
+   char *bookPtr,headerStr[MAXROWCHARS]="",tmp[15]="tctmp.tmp";
    int page;
    long newOffset, prevPos, offset;
    FILE *stream;
@@ -503,18 +533,18 @@ void savepage()
      fclose(stream);
    }
 
-   savecsvfile(tmp, FALSE);
+   savecsvfile(tmp, FALSE, /*out*/headerStr);
+   writePartial(di.fileName, tmp , di.offsets[page-1], di.offsets[page], headerStr, &newOffset );
    
-   writePartial(di.fileName, tmp , di.offsets[page-1], di.offsets[page], &newOffset );
    di.offsets[page] = newOffset;
    di.totalSize = filesize(di.fileName);
 }
 
 /* Saves the current spreadsheet */
-void savecsvfile(char* fileName, int inclHeader)
+void savecsvfile(char* fileName, int inclHeader, char *headerCopy)
 {
   char record[MAXROWCHARS] ="",dataBuff[MAXVALCHARS] = "", delim[2]=";",finfo[15] = "", temp[15]="";
-  int col, row, start = 0, overwrite, file;
+  int col, row, overwrite, file;
   CELLPTR cellptr;
   FILE *stream;
   int rows = lastrow, cols = lastcol;
@@ -524,14 +554,13 @@ void savecsvfile(char* fileName, int inclHeader)
 
   stream = fopen(fileName, "w+");
 
-  if(inclHeader == TRUE){
-   /* header */
-   strcpy(record , "");
-   for (col = 0; col <= cols; col++)
-   {
-      cellptr = cell[col][0];
-      if (cellptr != NULL)
-      {
+  /* header */
+  strcpy(record , "");
+  for (col = 0; col <= cols; col++)
+  {
+    cellptr = hcell[col];
+    if (cellptr != NULL)
+    {
       strcpy(finfo,"");
       strcpy(dataBuff,cellptr->v.text);
 
@@ -561,16 +590,15 @@ void savecsvfile(char* fileName, int inclHeader)
          sprintf(temp, "{%s}", finfo);
          strcat(record, temp);
       }
-      }
       if(col < cols) strcat(record, delim);
-   }
-   strcat(record, "\n");
-   fwrite(record, strlen(record), 1, stream);
-   start = 1;
+    }
   }
+  strcat(record, "\n");
+  if(headerCopy != NULL) strcpy(headerCopy, record);
+  if(inclHeader) fwrite(record, strlen(record), 1, stream);
 
   /* actual data */
-  for (row = start; row <= rows; row++)
+  for (row = 0; row <= rows; row++)
   {
    strcpy(record , "");
 

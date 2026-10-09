@@ -27,7 +27,8 @@ int alloctext(int col, int row, char *s)
  cellptr = (CELLPTR)(malloc(strlen(s) + 2));
  cellptr->attrib = TEXT;
  strcpy(cellptr->v.text, s);
- cell[col][row] = cellptr;
+ if(row<0)	hcell[col] = cellptr;
+ else		cell[col][row] = cellptr;
  return(TRUE);
 } /* alloctext */
 
@@ -63,10 +64,23 @@ int allocformula(int col, int row, char *s, double amt)
  return(TRUE);
 } /* allocformula */
 
+CELLPTR findCell(int col, int row)
+{
+ return (row<0) ? hcell[col] : cell[col][row];
+}
+void freeUpCell(int col, int row)
+{
+ if (row<0) {
+	 free(hcell[col]); hcell[col] = NULL;
+ } else {
+	 free(cell[col][row]); cell[col][row] = NULL;
+ }
+}
+
 void deletecell(int col, int row, int display)
 /* Deletes a cell */
 {
- CELLPTR cellptr = cell[col][row];
+ CELLPTR cellptr = findCell(col,row);
 
  if (cellptr == NULL)
   return;
@@ -83,9 +97,8 @@ void deletecell(int col, int row, int display)
    memleft += formulacellsize(cellptr->v.f.formula);
    break;
  } /* switch */
- if(row == 0) format[col] &= ~OVERWRITE;
- free(cell[col][row]);
- cell[col][row] = NULL;
+ if((HEADERROW && row<0)||(HEADERROW==0 && row==0)) format[col] &= ~OVERWRITE;
+ freeUpCell(col,row);
  if (col == lastcol)
   setlastcol();
  if (row == lastrow)
@@ -374,7 +387,8 @@ void act(char *s)
  double value;
 
  deletecell(curcol, currow, UPDATE);
- value = parse(s, &attrib);
+ if(currow <0) attrib = TEXT; // Header is always a text
+ else value = parse(s, &attrib);
  switch(attrib)
  {
   case TEXT :
@@ -391,7 +405,7 @@ void act(char *s)
  } /* switch */
  if (allocated)
  {
-  if(currow==0)format[curcol] &= ~OVERWRITE;
+  if((HEADERROW && currow<0)||(HEADERROW==0 && currow==0)) format[curcol] &= ~OVERWRITE;
   clearoflags(curcol + 1, currow, UPDATE);
   if (attrib == TEXT)
     setoflags(curcol, currow, UPDATE);
@@ -413,11 +427,12 @@ int setoflags(int col, int row, int display)
 */
 {
  int len;
+ CELLPTR cellPtr = findCell(col,row);
 
- len = strlen(cell[col][row]->v.text) - colwidth[col];
- while ((++col < MAXCOLS) && (len > 0) && (cell[col][row] == NULL))
+ len = strlen(cellPtr->v.text) - colwidth[col];
+ while ((++col < MAXCOLS) && (len > 0) && (findCell(col,row) == NULL))
  {
-  if(row==0)format[col] |= OVERWRITE;
+  if((HEADERROW && row<0)||(HEADERROW==0 && row==0)) format[col] |= OVERWRITE;
   len -= colwidth[col];
   if (display && (col >= leftcol) && (col <= rightcol))
    displaycell(col, row, NOHIGHLIGHT, NOUPDATE);
@@ -431,7 +446,7 @@ void clearoflags(int col, int row, int display)
  while ((format[col] >= OVERWRITE) && (col < MAXCOLS) &&
         (cell[col] == NULL))
  {
-  if(row==0)format[col] &= ~OVERWRITE;
+  if((HEADERROW && row<0)||(HEADERROW==0 && row==0)) format[col] &= ~OVERWRITE;
   if (display && (col >= leftcol) && (col <= rightcol))
    displaycell(col, row, NOHIGHLIGHT, NOUPDATE);
   col++;
@@ -441,8 +456,8 @@ void clearoflags(int col, int row, int display)
 void updateoflags(int col, int row, int display)
 /* Starting in col, moves back to the last TEXT cell and updates all flags */
 {
- while ((cell[col][row] == NULL) && (col-- > 0));
- if ((cell[col][row] != NULL) && (cell[col][row]->attrib == TEXT) && 
+ while ((findCell(col,row) == NULL) && (col-- > 0));
+ if ((findCell(col,row) != NULL) && (findCell(col,row)->attrib == TEXT) && 
      (col >= 0))
   setoflags(col, row, display);
 } /* updateoflags */
@@ -536,7 +551,7 @@ char *cellstring(int col, int row, int *color, int formatting)
 /* Creates an output string for the data in the cell in (col, row), and
    also returns the color of the cell */
 {
- CELLPTR cellptr = cell[col][row];
+ CELLPTR cellptr = findCell(col,row);
  int newcol, formatvalue;
  static char s[81], temp[MAXCOLWIDTH + 1];
  char *p;
@@ -552,8 +567,14 @@ char *cellstring(int col, int row, int *color, int formatting)
   else
   {
    newcol = col;
-   while (cell[--newcol][row] == NULL);
-   p = cell[newcol][row]->v.text;
+   if(row<0){
+	while (hcell[--newcol] == NULL);
+	p = hcell[newcol]->v.text;
+   } else {
+	while (cell[--newcol][row] == NULL);
+	p = cell[newcol][row]->v.text;
+   }
+   
    while (newcol < col)
     p += colwidth[newcol++];
    strncpy(temp, p, colwidth[col]);

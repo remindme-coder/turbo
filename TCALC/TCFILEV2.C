@@ -98,6 +98,17 @@ void lineAtPos(FILE *stream,long apprxPos, long totalSize, char* line, long* sta
       *endPos = 0;
       return;
    }
+   else if(apprxPos <= 3) {
+      tmpPos = beginPos = 0;
+      fseek(stream, beginPos  , SEEK_SET);
+      fread(tmp,sizeof(char),MAXROWCHARS,stream);
+      ptr = strchr(tmp, '\n');
+      
+      if(ptr) {
+         i = (int)(ptr - &tmp[0]);
+         tmp[i] = 0;
+      }
+   }
    else if( totalSize - (apprxPos+3) < 3 /* Adjustment */) {
       // The requested line is at the end of the file
       beginPos = totalSize - MAXROWCHARS;
@@ -124,7 +135,7 @@ void lineAtPos(FILE *stream,long apprxPos, long totalSize, char* line, long* sta
       tmp[range] = 0;
       ptr = strchr(tmp,'\n');
       if(ptr) ptr[0] = 0;
-      logmsg("Temp pos is %ld, strlen:%d, str:%s\n", tmpPos, range, tmp);
+      //logmsg("Temp pos is %ld, strlen:%d\n", tmpPos, range, tmp);
 
       // Correct tmpPos
       pass=0;
@@ -249,7 +260,11 @@ void lineAtPos(FILE *stream,long apprxPos, long totalSize, char* line, long* sta
 }
 
 int isPagePresent(int prevNext) {
-   if(prevNext == 0) return di.curPage >= 1; // There is no Page 0;
+   if(prevNext == 0) {
+    if (di.curPage == 1) return ((di.totalSize - di.offsets[di.curPage]) > 3);// might be a single page document
+    else if (di.curPage <= 0) return FALSE; // There is no Page 0 (or) -1;
+    else return TRUE; // There is always a page for multi-paged document
+   }
    else if(prevNext == -1) return di.curPage > 1;
    else if(prevNext == 1) return (di.totalSize - di.offsets[di.curPage]) > 3  ;
    return 0;
@@ -279,7 +294,7 @@ char* readSanity(char* filename, long totalSize) {
    return docPtr;
 }
 
-char* readEntire(char* fileName){
+char* readEntire(char* fileName, char *header){
    char temp[25],lastLine[MAXROWCHARS], *lastPtr;
    FILE *stream;
    long readSize,sPos,curpos, totalSize = filesize(fileName);
@@ -297,6 +312,10 @@ char* readEntire(char* fileName){
 
    stream = fopen(fileName,"r");
    if(stream){
+      // Read the header first
+      lineAtPos(stream, 0, totalSize, header, &sPos, &curpos);
+      
+      fseek(stream, curpos, SEEK_SET);
       setmem(book,readSize,' ');
       fread(book,sizeof(char),totalSize,stream);
       curpos = ftell(stream);
@@ -320,15 +339,16 @@ int isNewLn(char k){
 
 char* readPartialOffset(char* fileName , int prevNext, long offset, long* nxtOffset){
    int i;
+   char *header;
    strcpy( di.fileName , fileName);
    di.curPage = 1;         // Used
    for(i=0; i< 12; i++) di.offsets[i] = 0; // clearing...
    di.offsets[1] = offset;
 
-   return readPartial(fileName , prevNext , nxtOffset);
+   return readPartial(fileName , prevNext, header , nxtOffset);
 }
 
-char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr*/, long* nxtOffset){
+char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr*/, char *header, long* nxtOffset){
    long curPos, prevPos, offsetA=0, offsetB=0, totalSize = filesize(fileName), partialSize = 0  ;
    FILE *stream;
    char *pencil,*endPtr, tmp[MAXROWCHARS+1], lastLine[MAXROWCHARS], *lastPtr, first10[11];
@@ -366,7 +386,6 @@ char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr
    }
 
    allocSZ = readSize;
-   logmsg("offset:(%ld,%ld), page:%d, size:(%ld/%ld)\n",offsetA, offsetB,pageNo, (long)readSize, (long)totalSize);
    
    if(!book)	book = (char*)calloc(readSize+1,sizeof(char));
    else 		book = (char*)realloc(book, readSize+1);
@@ -376,6 +395,14 @@ char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr
    if(!stream) return NULL;
    strcpy(book , NULL);
 
+   if(pageNo == 1 && offsetA == 0 && HEADERROW ) {
+    // Read the header first when at page 1
+    lineAtPos(stream, 0, totalSize, header, &prevPos, &curPos);
+    offsetA = curPos;
+    di.offsets[0] = curPos;
+   }
+
+   logmsg("offset:(%ld,%ld), page:%d, size:(%ld/%ld)\n",offsetA, offsetB,pageNo, (long)readSize, (long)totalSize);
    prevPos = offsetA;
    fseek(stream, offsetA, SEEK_SET);
    fread(book,sizeof(char),readSize,stream);
@@ -555,7 +582,7 @@ char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr
 }
 
 void copyStream(long fromOff, FILE *fromStre, long fromMax, FILE *to ) {
-   int iter=0,length = MAXROWCHARS;
+   int iter=0,length = MAXROWCHARS, correction=0;
    long curpos;
    char tmp[MAXROWCHARS+1];
 
@@ -574,6 +601,9 @@ void copyStream(long fromOff, FILE *fromStre, long fromMax, FILE *to ) {
       if(curpos >= fromMax) {
          trim(tmp);
          length = strlen(tmp);
+         correction = (curpos - fromMax);
+         length -= correction;
+         tmp[length] = 0;
       }
       fwrite(tmp, sizeof(char), length, to);
       iter++;
@@ -582,14 +612,15 @@ void copyStream(long fromOff, FILE *fromStre, long fromMax, FILE *to ) {
    if(isprint(tmp[length-1]))
       fwrite("\n", sizeof(char), 1, to);
    
-   logmsg("fromOff:%ld, curpos:%ld, totalCopied:%ld, iter: %d\n", fromOff, curpos, fromMax, iter);
+   logmsg("offset(%ld,%ld), curpos:%ld, correction:%d, iter: %d\n", fromOff, fromMax, curpos, correction, iter);
 }
 
 
-void writePartial(char* fileName,char* dataFile ,long offset, long nxtOffset, long* newOffset ){
-   long curpos=0L, length, readSize, totalSize  ;
+void writePartial(char* fileName,char* dataFile ,long offset, long nxtOffset, char* header, long* newOffset ){
+   long curpos=0L, length, readSize, totalSize, headDiff = 0L  ;
    FILE *stream, *duplStream, *modStream;
    char duplFile[15] = "tcdupl.tmp" ;
+   int i;
 
    // step 1: Save the original to a tmp file
    totalSize = filesize(fileName);
@@ -610,21 +641,36 @@ void writePartial(char* fileName,char* dataFile ,long offset, long nxtOffset, lo
    if(totalSize == 0) return;
    stream = fopen(fileName,"w");
    duplStream = fopen(duplFile, "r");
-   copyStream(0L, duplStream, offset, stream );
+   
+   // step 2.1: Write the changed header
+   if(di.offsets[0] > 0 ){
+     fwrite(header, sizeof(char), strlen(header), stream);
+     curpos = ftell(stream);
+     headDiff = curpos - di.offsets[0];
+   }
+   
+   // step 2.2: Append the original data up to the offset
+   if(di.offsets[0] < offset)
+   copyStream(di.offsets[0], duplStream, offset, stream );
 
-   // step 3: Write the changed data that is fed, continuing from offset
+   // step 3: Append the changed data that is fed
    readSize = filesize(dataFile);
    modStream = fopen(dataFile, "r");
-   fseek(stream, offset, SEEK_SET);
    copyStream(0L, modStream, readSize, stream );
    fclose(modStream);
    curpos = ftell(stream);
    *newOffset = curpos;
 
-   // step 4: Write the rest of the unbuffered data
+   // step 4: Append the rest of the unbuffered data
    if(nxtOffset < totalSize){
       copyStream(nxtOffset, duplStream, totalSize, stream );
    }
+   
+   // step 5: Correct the offsets that are modified by header changes
+   if( headDiff != 0 )
+     for(i=0; i< 12; i++) 
+	   if( di.offsets[i] > 0 )
+	     di.offsets[i] += headDiff; // correcting...
 
    fclose(duplStream);
    fclose(stream);

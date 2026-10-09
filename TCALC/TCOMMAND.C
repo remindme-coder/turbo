@@ -19,7 +19,7 @@ void moverowup(void)
  displaycell(curcol, currow, NOHIGHLIGHT, NOUPDATE);
  if (currow > toprow)
   currow--;
- else if (toprow != 0)
+ else if (toprow > 0)
  {
   scroll(DOWN, 1, LEFTMARGIN + 1, TOPMARGIN, 80, SCREENROWS + (TOPMARGIN-1), WHITE);
   toprow--;
@@ -27,7 +27,9 @@ void moverowup(void)
   displayrow(toprow, NOUPDATE);
   setbottomrow();
  } else if (toprow == currow) {
-  // TODO: Header row logic goes here
+  #if HEADERROW == 1 
+  currow--;
+  #endif
  }
 } /* moverowup */
 
@@ -66,7 +68,7 @@ void movecolleft(void)
   setleftcol();
   if (oldleftcol <= rightcol)
    scroll(RIGHT, colstart[oldleftcol - leftcol] - LEFTMARGIN, LEFTMARGIN + 1,
-          TOPMARGIN, 80, SCREENROWS + (TOPMARGIN-1), WHITE);
+          TOPMARGIN-HEADERROW, 80, SCREENROWS + (TOPMARGIN-1), WHITE);
   clearlastcol();
   for (col = leftcol; col <= oldleftcol - 1; col++)
    displaycol(col, NOUPDATE);
@@ -93,7 +95,7 @@ void movecolright(void)
   setrightcol();
   if (oldrightcol >= leftcol)
    scroll(LEFT, oldcolstart[leftcol - oldleftcol] - LEFTMARGIN,
-          LEFTMARGIN + 1, 3, 80, SCREENROWS + 2, WHITE);
+          LEFTMARGIN + 1, TOPMARGIN-HEADERROW, 80, SCREENROWS + (TOPMARGIN-1), WHITE);
   clearlastcol();
   for (col = oldrightcol + 1; col <= rightcol; col++)
    displaycol(col, NOUPDATE);
@@ -203,7 +205,7 @@ void editcell(CELLPTR ecell)
 void clearsheet(int keepFile)
 /* Clears the current spreadsheet */
 {
- int col, row;
+ int col, row, tmpCol = lastcol;
 
  for (row = 0; row <= lastrow; row++)
  {
@@ -212,6 +214,11 @@ void clearsheet(int keepFile)
  }
  if(!keepFile) 
  {
+  // header
+  #if HEADERROW == 1 
+  for (col = 0; col <= tmpCol; col++)
+   deletecell(col, -1*HEADERROW, NOUPDATE);
+  #endif
   initvars();
   strcpy(sheetname, "");
  }
@@ -388,7 +395,7 @@ void savesheet(void)
  
  if( strstr( strupr(filename), ".CSV" ) ){
   if(isPagePresent(0)) savepage();
-  else  savecsvfile(filename, TRUE);
+  else  savecsvfile(filename, TRUE, NULL);
  } else {
   if ((file = open(filename, O_RDWR | O_CREAT | O_TRUNC | O_BINARY,
    S_IREAD | S_IWRITE)) == -1)

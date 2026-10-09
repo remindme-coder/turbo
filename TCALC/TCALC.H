@@ -66,12 +66,13 @@
 #define MINCOLWIDTH 3
 #define MAXCOLWIDTH 80 - LEFTMARGIN
 #define SCREENCOLS (80 - LEFTMARGIN) / MINCOLWIDTH + 1
-#define SCREENROWS 20
+#define SCREENROWS 19 /* Original is 20 */
+#define HEADERROW 1   /* Original is 0 */
 #define DEFAULTWIDTH 10
 #define DEFAULTFORMAT 0X42
 #define MAXINPUT 79
 #define MAXPLACES 8
-#define TOPMARGIN 3
+#define TOPMARGIN 4   /* Original is 3 */
 #define PARSERSTACKSIZE 20
 #define MEMPIT 50  /* Trailing space allocation */
 #define MAXROWCHARS 500
@@ -269,7 +270,7 @@ char* readentire(char* fileName);
 int validatecsvfile(char* fileName);
 void borrowLine(int direction);
 void loadcsvfile(char* fileName, int);
-void savecsvfile(char* fileName, int inclHeader);
+void savecsvfile(char* fileName, int inclHeader, char* headerCopy);
 void savepage();
 char finddelimiter(char *sheetheader, int *count);
 void loadturbofile(int file);
@@ -287,7 +288,7 @@ char* doubletostr(double fv);
 #if !defined(MAIN)
 
 extern DATAINFO di;
-extern CELLPTR cell[MAXCOLS][MAXROWS], curcell;
+extern CELLPTR cell[MAXCOLS][MAXROWS], curcell, hcell[MAXCOLS];
 extern unsigned char format[MAXCOLS];
 extern unsigned char colwidth[MAXCOLS];
 extern unsigned char colstart[SCREENCOLS];

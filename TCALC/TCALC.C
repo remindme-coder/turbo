@@ -10,7 +10,7 @@
 #include "tcalc.h"
 #include "tcfile.h"
 
-CELLPTR cell[MAXCOLS][MAXROWS], curcell;
+CELLPTR cell[MAXCOLS][MAXROWS], curcell, hcell[MAXCOLS];
 unsigned char format[MAXCOLS];
 unsigned char colwidth[MAXCOLS];
 unsigned char colstart[SCREENCOLS];
@@ -36,7 +36,7 @@ void run()
  do
  {
   displaycell(curcol, currow, HIGHLIGHT, NOUPDATE);
-  curcell = cell[curcol][currow];
+  curcell = (currow<0) ? hcell[curcol] : cell[curcol][currow];
   showcelltype();
   input = getkey();
   switch(input)
@@ -57,6 +57,7 @@ void run()
      recalc();
     break;
    case PGUPKEY :
+    if(currow<0) break; // header
     atbottom = 0;
     toprow -= SCREENROWS;
     currow -= SCREENROWS;
@@ -79,6 +80,7 @@ void run()
     displayscreen(NOUPDATE);
     break;
    case PGDNKEY :
+    if(currow<0) break; // header
     attop = 0;
     toprow += SCREENROWS;
     currow += SCREENROWS;
