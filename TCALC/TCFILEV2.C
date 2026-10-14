@@ -91,7 +91,7 @@ void lineAtPos(FILE *stream,long apprxPos, long totalSize, char* line, long* sta
    int i,exact,left=0,right=0, lastI, range,pass, iter=0;
    long orig = ftell(stream), tmpPos, beginPos,wall;
    
-   //blankOut(tmp, MAXROWCHARS);
+   blankOut(tmp, MAXROWCHARS);
 
    if(apprxPos < 0) {
       strcpy(line, "");
@@ -260,6 +260,7 @@ void lineAtPos(FILE *stream,long apprxPos, long totalSize, char* line, long* sta
 }
 
 int isPagePresent(int prevNext) {
+   //logmsg( "di.totalSize:%ld, di.curPage:%d, di.offsets[]:%ld\n", (long)di.totalSize, di.curPage, (long)di.offsets[di.curPage] );
    if(prevNext == 0) {
     if (di.curPage == 1) return ((di.totalSize - di.offsets[di.curPage]) > 3);// might be a single page document
     else if (di.curPage <= 0) return FALSE; // There is no Page 0 (or) -1;
@@ -500,13 +501,14 @@ char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr
    }
 
    //logmsg("last pencil :%s\n", pencil);
-   dataSZ = allocSZ;
+   dataSZ = pencil - &book[0];
    remCount = 0;//Unnecessary lines
    xtraData = pencil - lastPtr;
 
    pencil = lastPtr ; // Last char of the book
    endPtr = lastPtr;
    if(curPos-offsetA > dataSZ) xtraCh = (float)(curPos-offsetA-dataSZ)/(float)MAXROWS;
+   else if(curPos == totalSize) xtraCh = 1; // default xtra char
 
    logmsg("lines: %d, with data %d, max %d, Pos:%ld, book:%d chars\n", lines, dataSZ, allocSZ, curPos, strlen(book));
    logmsg("Differences Pos:%d, Data:%d, xtraCh:%1.1f, xtraData:%d \n",  (int)(curPos-offsetA), dataSZ, (float)xtraCh, (int)xtraData);
@@ -530,14 +532,15 @@ char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr
          i++;
       }
 
+      // Calculate the length added by xtra lines
+      tmpCalc = (float)remCount * (float)xtraCh;
+
       if(curPos >= totalSize){
          // No need to worry about extra spaces
          trim(lastPtr);
-         xtraData = strlen(lastPtr)-1;// exclude new line
+         xtraData = strlen(lastPtr) + (int)ceil(tmpCalc);
          curPos = totalSize;
       } else {
-         // Calculate the length added by xtra lines
-         tmpCalc = (float)remCount * (float)xtraCh;
          xtraData += (int)(endPtr - lastPtr) + (int)ceil(tmpCalc);
       }
 
@@ -572,11 +575,12 @@ char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr
 
    // 4. Book keeping
    logmsg( "page:%d, offset(%ld,%ld), book:%d chars\n", pageNo, offsetA, offsetB, strlen(book));
-   di.partialSize = dataSZ;
+   di.partialSize = di.partialSize < dataSZ ? dataSZ : di.partialSize;
    di.offsets[pageNo - 1] = offsetA ;
    di.offsets[pageNo] = offsetB ;
    *nxtOffset = offsetB;
    strcpy(di.fileName, fileName);
+   bookSZ = di.partialSize;
 
    return book;
 }

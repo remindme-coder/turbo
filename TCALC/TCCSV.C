@@ -434,7 +434,7 @@ int loadcsvalue(char* record, int i  ) {
 
 void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/){
    int i=0, j, allocated, len;
-   long totalSize = filesize(fileName), tempMem, nxtOffset;
+   long totalSize = filesize(fileName), tempMem, gridMem, nxtOffset;
    char *ptr,*prevPtr,*temp, debug[25];
    char record[MAXROWCHARS];
    char* doc = NULL;
@@ -447,6 +447,7 @@ void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/
    // If the doc contains no data
    if(!doc || strlen(doc) == 0) return;
 
+   tempMem = memleft ;
    if(prevNext == 0){
       // Identify the delimiter from the sheet header
       delimiter = finddelimiter(record, &delimCount);
@@ -455,7 +456,6 @@ void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/
 
       allocated = loadcsheader(record);
    }
-   tempMem = memleft ;
 
    ptr = doc;
    while( ptr && i < MAXROWS ) {
@@ -484,7 +484,8 @@ void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/
       }
    }
    //free(doc);
-   memgrid = tempMem - memleft ;
+   gridMem = tempMem - memleft;
+   memgrid = (memgrid < gridMem) ? gridMem :  memgrid;
 }
 
 void borrowLine(int direction) {
@@ -492,26 +493,42 @@ void borrowLine(int direction) {
    char line[MAXROWCHARS];
    long prevPos,offset;
    long totalSZ = di.totalSize;
-   FILE *stream = fopen(di.fileName,"r");
+   FILE *stream = NULL;
    offset = di.offsets[di.curPage];
 
-   if(direction < 0) {
-      // Indicates INSERT
-      di.hasNewRow = 1;
-      
-   } else if(direction > 0) {
-      if(lastrow == (MAXROWS-1)) {
-         // Indicates DELETE
-         offset += 3; // Adjustment
-         lineAtPos(stream, offset, totalSZ, line, &prevPos,&offset );
-         di.offsets[di.curPage] = offset;
+   if(di.hasNewRow) {
+     // Adjustment : This is a special save case, as the page already has changes, save them b4 making amendments
+     savepage();
 
-         ro = currow; col = curcol;
-         loadcsvalue(line, lastrow);
-         currow = ro; curcol = col;
-      }
+     stream = fopen(di.fileName,"r");
+     offset = di.offsets[di.curPage];
+     lineAtPos(stream, offset - 3, di.totalSize, NULL, &prevPos, &offset);// Adjustment : 3 chars
+     di.offsets[di.curPage] = prevPos;
+     fclose(stream);
    }
-   fclose(stream);
+
+   if(lastrow == (MAXROWS-1)) {
+     stream = fopen(di.fileName,"r");
+     if(direction < 0) {
+       // Indicates INSERT
+       di.hasNewRow = 1;
+
+       // Adjustment
+       lineAtPos(stream, offset - 3, totalSZ, line, &prevPos,&offset );
+       di.offsets[di.curPage] = prevPos;
+	   di.offsets[di.curPage+1] = di.offsets[di.curPage+1] == 0 ? totalSZ : di.offsets[di.curPage+1];
+	   //logmsg( "di.totalSize:%ld, di.curPage:%d, line pos:%ld, line end pos:%ld \n", (long)totalSZ, di.curPage, (long)prevPos, (long)offset );
+     } else if(direction > 0) {
+       // Indicates DELETE
+       lineAtPos(stream, offset + 3, totalSZ, line, &prevPos,&offset );
+       di.offsets[di.curPage] = offset;
+
+       ro = currow; col = curcol;
+       loadcsvalue(line, lastrow);
+       currow = ro; curcol = col;
+     }
+     fclose(stream);
+   }
 }
 
 
@@ -520,23 +537,13 @@ void savepage()
    char *bookPtr,headerStr[MAXROWCHARS]="",tmp[15]="tctmp.tmp";
    int page;
    long newOffset, prevPos, offset;
-   FILE *stream;
    page = di.curPage;
-
-   if(di.hasNewRow) {
-     di.hasNewRow = 0;
-     offset = di.offsets[di.curPage];
-     stream = fopen(di.fileName,"r");
-     lineAtPos(stream, offset - 3, di.totalSize, NULL, &prevPos, &offset);// Adjustment : 3 chars
-     di.offsets[di.curPage] = prevPos;
-     di.offsets[di.curPage+1] = di.totalSize;
-     fclose(stream);
-   }
 
    savecsvfile(tmp, FALSE, /*out*/headerStr);
    writePartial(di.fileName, tmp , di.offsets[page-1], di.offsets[page], headerStr, &newOffset );
    
    di.offsets[page] = newOffset;
+   di.hasNewRow = 0;
    di.totalSize = filesize(di.fileName);
 }
 

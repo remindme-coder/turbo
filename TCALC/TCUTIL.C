@@ -110,7 +110,12 @@ void deletecell(int col, int row, int display)
 void printfreemem(void)
 /* Prints the amount of free memory */
 {
- memleft = coreleft() + reusableFileMem() + reusableGridMem() ;
+ long coreM = coreleft(),
+  fileM = reusableFileMem(),
+  gridM = reusableGridMem();
+
+ memleft = coreM + fileM + gridM ;
+ logmsg("coreM:%ld, fileM:%ld, gridM:%ld, total: %ld\n", coreM, fileM, gridM, memleft);
  writef(strlen(MSGMEMORY) + 2, 1, MEMORYCOLOR, 6, "%6ld", memleft);
 } /* printfreemem */
 
