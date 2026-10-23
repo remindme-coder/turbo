@@ -13,11 +13,11 @@ Fixes
 7. Reusable memory = Mem used for loading CSV + Grid Memory + Actual Memory left - Closed
 8. Static display of the header row - Closed
 	a. SCREENROW, TOPMARGIN parameters incorporation.
-	b. Bug Fix : 
+	b. Bug Fix : Delete/Insert scenarios
 9. Column Menu - In Progress
-	a. Insert column for multi-paged - In Progress
-	b. Delete column for multi-paged
-	c. Add Sorting
+	a. Insert column for multi-paged - Closed
+	b. Delete column for multi-paged - Closed
+	c. Add Sorting - Open
 10. Spreadsheet Menu - Open
 	a. Clear for multi-paged. Put "Are you sure?".
 11. Utility Menu - Open
@@ -25,7 +25,10 @@ Fixes
 		i. Remove Aggregate formula from the system, as it might not be applicable to multi-paged
 		ii. All data based formulas should still be available to use
 	b. Formula Display is not required
-12. Turn off logger to release builds by #ifdef
+12. Turn off logger to release builds by #ifdef - Open
+13. Append a new line to a CSV in-case if the file ends without it - Open
+14. MINROWCHARS must be incorporated as a standard for row width - Open
+14. SOLID prinicples mapping research - Open
 
 Issues
 ------------------------------------------------------------------------------------------------------------------------------------------------

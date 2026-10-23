@@ -17,6 +17,181 @@ const char curly[2] = "{}";
 char delimiter = ';';
 int delimCount = 0;
 
+int columnChanged = FALSE;
+int colDeleted = -1;
+int colInserted = -1;
+
+
+void deleteField(char *line, int length, int col) {
+  int start,pos = 0, colItr = 0;
+  start = pos;
+
+  while(pos < length) {
+
+   // skip data without quotes
+   while( pos < length && line[pos] != quot && line[pos] != delimiter && line[pos] != '\n' ) pos++;
+
+   if(pos < length && line[pos] == quot) {
+    pos++;
+    // just surf the data
+    while( pos < length && line[pos] != quot ) pos++;
+    pos++;
+
+    // skip data without quotes
+    while( pos < length && line[pos] != delimiter && line[pos] != '\n' ) pos++;
+   }
+
+   if(pos < length) {
+    if(colItr == col){
+      if(line[pos] == '\n') movmem(&line[pos], &line[start-1], length - (pos) + 1);
+      else movmem(&line[pos+1], &line[start], length - (pos+1) + 1);
+      break;
+    }
+    if( line[pos] == delimiter) {
+      colItr++;pos++;
+      start = pos;
+    } else if (line[pos] == '\n') {
+      logmsg("pos %d, char %c, colItr %d, col %d\n", pos,line[pos], colItr, col );
+      colItr = 0;
+      pos = 0;
+      break;
+    }
+   }
+  }
+}
+
+void insertField(char *line, int length, int col) {
+  int start,pos = 0, colItr = 0;
+  start = pos;
+
+  while(pos < length) {
+
+   // skip data without quotes
+   while( pos < length && line[pos] != quot && line[pos] != delimiter && line[pos] != '\n' ) pos++;
+
+   if(pos < length && line[pos] == quot) {
+    pos++;
+    // just surf the data
+    while( pos < length && line[pos] != quot ) pos++;
+    pos++;
+
+    // skip data without quotes
+    while( pos < length && line[pos] != delimiter && line[pos] != '\n' ) pos++;
+   }
+
+   if(pos < length) {
+    if(colItr == col){
+      movmem(&line[start], &line[start+1], length - start + 1);
+      line[start] = delimiter;
+      break;
+    }
+    if( line[pos] == delimiter) {
+      colItr++;pos++;
+      start = pos;
+    } else if (line[pos] == '\n') {
+      colItr = 0;
+      pos = 0;
+      break;
+    }
+   }
+  }
+}
+
+int modifyLines(char *tmp, long fromOff, long* curPos, FILE *stream ) {
+  char *ptrSt,*pencil,*ptr,ch[1];
+  long tmpPos = fromOff, newPos = 0L;
+  int length = strlen(tmp), tmpLen, linesFound = 0, lineI;
+
+  // Identification purpose check
+  if( colDeleted < 0 && colInserted < 0 ) return length;
+
+  // Skip the last line if it occupies whole MAXROWCHARS
+  if( length > (MAXROWCHARS-(MAXROWS/2)) ){
+	while( !( isNewLn(tmp[length-1]) || isprint(tmp[length-1]) ) ) length--;
+    while( isNewLn(tmp[length-1]) ) length--;
+    while( isprint(tmp[length-1]) ) length--;
+  }
+
+  // Extract Lines
+  ptrSt = &tmp[0];
+  pencil = ptrSt;
+  ptr = strchr(tmp, '\n');
+
+  if(!ptr){
+    length = strlen(tmp);
+    newPos = fromOff + length;
+    linesFound++;
+
+    if(colInserted > -1)  insertField(tmp, length,  colInserted);
+    else if(colDeleted > -1)  deleteField(tmp, length,  colDeleted);
+  } else {
+    while(ptr && (ptr - pencil) > 0 && (pencil - ptrSt < length) ){
+     tmpPos += ptr - pencil + 2;
+     ptr++;
+     pencil = ptr;
+     ptr = strchr(ptr, '\n');
+     linesFound++;
+    }
+
+    fseek(stream, tmpPos, SEEK_SET);
+    fread(ch,sizeof(char),1,stream);
+    while(isprint( ch[0]) && (tmpPos-1) > 0 ){
+     fseek(stream, --tmpPos, SEEK_SET);
+     fread(ch,sizeof(char),1,stream);
+    }
+
+    // The offset position is now identified
+    newPos = tmpPos+1;
+
+    // now lets apply schema modifications
+    pencil = &tmp[0];
+    ptr = strchr(tmp, '\n');
+    lineI = 0;
+
+    if(colInserted > -1){
+     // 1. Insert new column
+     while(ptr && (lineI < linesFound) ){
+       tmpLen = strlen( pencil );
+       insertField( pencil, tmpLen, colInserted);
+       ptr = strchr(pencil, '\n');
+       while( isNewLn(ptr[0]) ) ptr++;
+
+       pencil = ptr;
+       ptr = strchr(pencil, '\n');
+       lineI++;
+     }
+    } else if(colDeleted > -1){
+     // 2. Delete column
+     while(ptr && (lineI < linesFound) ){
+       tmpLen = strlen( pencil );
+       deleteField( pencil, tmpLen, colDeleted);
+       ptr = strchr(pencil, '\n');
+       while( isNewLn(ptr[0]) ) ptr++;
+
+       pencil = ptr;
+       ptr = strchr(pencil, '\n');
+       lineI++;
+     }
+    }
+    length = (pencil-ptrSt);
+  }
+
+  *curPos = newPos;
+  return length;
+}
+
+void insertCSVCol(int col) {
+   colInserted = col;
+   columnChanged = TRUE;
+   saveRequired = TRUE;
+}
+
+void deleteCSVCol(int col) {
+   colDeleted  = col;
+   columnChanged = TRUE;
+   saveRequired = TRUE;
+}
+
 int isnumeric(char *data){
    int i=0;
    if(!data || strlen(data) == 0) return 0;
@@ -64,7 +239,7 @@ int trimzeros(char *buff){
 }
 
 
-void unmaskcell(char *vstring) {
+void unmaskStr(char *vstring) {
    int pos;
    if(!vstring || strlen(vstring) == 0) return;
 
@@ -78,58 +253,38 @@ void unmaskcell(char *vstring) {
    }
 }
 
-void maskrec(char *vstring) {
-  int tpos, length, quoted, pos;
+void maskStr(char *vstring) {
+  int length, pos = 0;
 
   pos = strlen(vstring) - 1;
-  while(pos >= 0) {
-   quoted = 0;
+  while(pos > 0) {
 
-   // skip delimiter
-   if(vstring[pos] == delimiter) pos--;
-
-   // skip trailing spaces
-   tpos = pos+1;
+   // skip data without quotes
    length = strlen(vstring);
-   while( vstring[pos] == ' ' ) pos--;
-   movmem(&vstring[tpos], &vstring[pos+1], length - tpos + 1);
-   length = length - (tpos - (pos + 1));
+   while( pos >= 0 && vstring[pos] != quot ) pos--;
 
-   // skip quotation
-   if(vstring[pos] == quot) {
+   // skip end quotation for quoted data
+   if(pos >= 0 && vstring[pos] == quot) {
     movmem(&vstring[pos+1], &vstring[pos], length - pos + 1);
     length--;
-    quoted = 1; pos--;
-   }
-
-   while (pos >= 0 )
-   {
-    if( vstring[pos] == quot ) {
-     tpos = pos - 1;
-     while( vstring[tpos] == ' ' ) tpos--;
-     if( vstring[tpos] == delimiter ) {
-	  movmem(&vstring[pos+1], &vstring[pos], length - pos + 1);
-      length--;
-      pos = tpos;
-      break;
-     } else {
-      // Might be a quot within quotes
-     }
-    }
-    else if( vstring[pos] == delimiter ) {
-     if(!quoted )    break;
-     else vstring[pos] = '*';
-    }
-
     pos--;
-   }
 
-   // skip forward spaces
-   tpos = pos + 1;
-   //length = strlen(vstring);
-   while( vstring[tpos] == ' ' ) tpos++;
-   movmem(&vstring[tpos], &vstring[pos+1], length - tpos + 1);
-   length = length - (tpos - (pos + 1));
+    // surf the data and mask the delimiters
+    while( pos >= 0 && vstring[pos] != quot ) {
+     if( vstring[pos] == delimiter ) vstring[pos] = '*';
+     pos--;
+    }
+
+    // skip start quotation for quoted data
+    if(pos >= 0 && vstring[pos] == quot) {
+     movmem(&vstring[pos+1], &vstring[pos], length - pos + 1);
+     length--;
+     pos--;
+    }
+
+    // skip data without quotes
+    while( pos >= 0 && vstring[pos] != quot ) pos--;
+   }
   }
 }
 
@@ -139,7 +294,7 @@ void insertspace(char *vstring){
   char debug[25];
   if(!vstring || strlen(vstring) == 0) return;
 
-  maskrec(vstring);// This will escape the quotation and delimiter
+  maskStr(vstring);// This will escape the delimiters within quotations
   length = strlen(vstring);
   pos = length;
   while (pos > 0)
@@ -347,7 +502,7 @@ int loadcsheader(char* record  ) {
 
    do{
       rec.attrib = attribtype(temp);
-      if(strchr(temp,'*')) unmaskcell(temp);
+      if(strchr(temp,'*')) unmaskStr(temp);
       strcpy(rec.v.text, temp );
       allocated = alloctext(j, -1, rec.v.text);
 
@@ -394,7 +549,7 @@ int loadcsvalue(char* record, int i  ) {
       switch (rec.attrib)
       {
       case TEXT :
-      if(strchr(temp,'*')) unmaskcell(temp);
+      if(strchr(temp,'*')) unmaskStr(temp);
       strcpy(rec.v.text, temp );
       if ((allocated = alloctext(col, row, rec.v.text)) == TRUE)
          setoflags(col, row, NOUPDATE);
@@ -491,36 +646,23 @@ void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/
 void borrowLine(int direction) {
    int ro,col;
    char line[MAXROWCHARS];
-   long prevPos,offset;
-   long totalSZ = di.totalSize;
+   long prevPos,offset,totalSZ;
    FILE *stream = NULL;
+
    offset = di.offsets[di.curPage];
-
-   if(di.hasNewRow) {
-     // Adjustment : This is a special save case, as the page already has changes, save them b4 making amendments
-     savepage();
-
-     stream = fopen(di.fileName,"r");
-     offset = di.offsets[di.curPage];
-     lineAtPos(stream, offset - 3, di.totalSize, NULL, &prevPos, &offset);// Adjustment : 3 chars
-     di.offsets[di.curPage] = prevPos;
-     fclose(stream);
-   }
+   totalSZ = di.totalSize;
 
    if(lastrow == (MAXROWS-1)) {
      stream = fopen(di.fileName,"r");
      if(direction < 0) {
        // Indicates INSERT
-       di.hasNewRow = 1;
-
-       // Adjustment
-       lineAtPos(stream, offset - 3, totalSZ, line, &prevPos,&offset );
+       lineAtPos(stream, offset - 3, totalSZ, line, &prevPos,&offset );// Adjustment
        di.offsets[di.curPage] = prevPos;
 	   di.offsets[di.curPage+1] = di.offsets[di.curPage+1] == 0 ? totalSZ : di.offsets[di.curPage+1];
 	   //logmsg( "di.totalSize:%ld, di.curPage:%d, line pos:%ld, line end pos:%ld \n", (long)totalSZ, di.curPage, (long)prevPos, (long)offset );
      } else if(direction > 0) {
        // Indicates DELETE
-       lineAtPos(stream, offset + 3, totalSZ, line, &prevPos,&offset );
+       lineAtPos(stream, offset + 3, totalSZ, line, &prevPos,&offset );// Adjustment
        di.offsets[di.curPage] = offset;
 
        ro = currow; col = curcol;
@@ -529,6 +671,8 @@ void borrowLine(int direction) {
      }
      fclose(stream);
    }
+
+   saveRequired = TRUE;
 }
 
 
@@ -539,12 +683,20 @@ void savepage()
    long newOffset, prevPos, offset;
    page = di.curPage;
 
+   writet(1, 25, WHITE, MSGSAVING);
    savecsvfile(tmp, FALSE, /*out*/headerStr);
+   logmsg("Header is %s\n", headerStr);
    writePartial(di.fileName, tmp , di.offsets[page-1], di.offsets[page], headerStr, &newOffset );
-   
+
    di.offsets[page] = newOffset;
-   di.hasNewRow = 0;
    di.totalSize = filesize(di.fileName);
+
+   if(columnChanged) {
+    if(colDeleted > -1)	colDeleted = -1;
+    if(colInserted > -1) colInserted = -1;
+    columnChanged = FALSE;
+   }
+   writet(1, 25, WHITE, "");
 }
 
 /* Saves the current spreadsheet */
@@ -597,8 +749,8 @@ void savecsvfile(char* fileName, int inclHeader, char *headerCopy)
          sprintf(temp, "{%s}", finfo);
          strcat(record, temp);
       }
-      if(col < cols) strcat(record, delim);
     }
+    if(col < cols) strcat(record, delim);
   }
   strcat(record, "\n");
   if(headerCopy != NULL) strcpy(headerCopy, record);

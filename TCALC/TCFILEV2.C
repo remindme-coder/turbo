@@ -585,22 +585,26 @@ char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr
    return book;
 }
 
-void copyStream(long fromOff, FILE *fromStre, long fromMax, FILE *to ) {
-   int iter=0,length = MAXROWCHARS, correction=0;
-   long curpos;
+
+
+void copyStream(long fromOff, FILE *fromStre, long fromMax, FILE *to, int checkState ) {
+   int iter=0,origLen,length = MAXROWCHARS, correction=0;
+   long curpos, prevPos;
    char tmp[MAXROWCHARS+1];
 
-   //if(fromOff > 0L) fromOff = offsetCorrection(fromStre, fromOff);
    curpos = fromOff;
    fseek(fromStre, curpos, SEEK_SET);
 
    do{
+      blankOut(tmp,MAXROWCHARS);
+      length = MAXROWCHARS;
       if( fromMax - curpos < MAXROWCHARS) {
-         blankOut(tmp,MAXROWCHARS);
          length = fromMax - curpos;
       }
 
       fread(tmp,sizeof(char),length,fromStre);
+      tmp[length] = 0;
+      prevPos = curpos;
       curpos = ftell(fromStre);
       if(curpos >= fromMax) {
          trim(tmp);
@@ -609,9 +613,13 @@ void copyStream(long fromOff, FILE *fromStre, long fromMax, FILE *to ) {
          length -= correction;
          tmp[length] = 0;
       }
+      if( checkState && length > MINROWCHARS ) {
+         length = modifyLines(/*out*/tmp, prevPos, &curpos, fromStre);
+      }
+
       fwrite(tmp, sizeof(char), length, to);
       iter++;
-   } while(curpos < fromMax && iter<1000);
+   } while( (fromMax - curpos) > 3 && iter<1000); // Adjustment
 
    if(isprint(tmp[length-1]))
       fwrite("\n", sizeof(char), 1, to);
@@ -621,10 +629,10 @@ void copyStream(long fromOff, FILE *fromStre, long fromMax, FILE *to ) {
 
 
 void writePartial(char* fileName,char* dataFile ,long offset, long nxtOffset, char* header, long* newOffset ){
-   long curpos=0L, length, readSize, totalSize, headDiff = 0L  ;
+   long curpos=0L/* Destination Stream */, length, readSize, totalSize  ;
    FILE *stream, *duplStream, *modStream;
    char duplFile[15] = "tcdupl.tmp" ;
-   int i;
+   int pageNo;
 
    // step 1: Save the original to a tmp file
    totalSize = filesize(fileName);
@@ -636,11 +644,11 @@ void writePartial(char* fileName,char* dataFile ,long offset, long nxtOffset, ch
    
    stream = fopen(fileName,"r");
    duplStream = fopen(duplFile, "w");
-   copyStream(0L, stream, totalSize, duplStream );
+   copyStream(0L, stream, totalSize, duplStream, FALSE/*Only backup*/ );
    fclose(stream);
    fclose(duplStream);
 
-   // step 2: Write the fresh data up to the offset
+   // step 2: Write the fresh data up to the current page( offset )
    totalSize = filesize(duplFile);
    if(totalSize == 0) return;
    stream = fopen(fileName,"w");
@@ -650,31 +658,32 @@ void writePartial(char* fileName,char* dataFile ,long offset, long nxtOffset, ch
    if(di.offsets[0] > 0 ){
      fwrite(header, sizeof(char), strlen(header), stream);
      curpos = ftell(stream);
-     headDiff = curpos - di.offsets[0];
    }
    
-   // step 2.2: Append the original data up to the offset
-   if(di.offsets[0] < offset)
-   copyStream(di.offsets[0], duplStream, offset, stream );
+   // step 2.2: Append the original data up to the current page( offset )
+   if(di.offsets[0] <= offset){
+     pageNo = 0;// 0 is header
+     while( di.offsets[pageNo+1] <= offset ) {
+      copyStream(di.offsets[pageNo], duplStream, di.offsets[pageNo+1], stream, TRUE/* schema check*/ );
+      di.offsets[pageNo] = curpos;
+      pageNo++;
+      curpos = ftell(stream);
+     }
+     di.offsets[pageNo] = curpos;
+   }
 
-   // step 3: Append the changed data that is fed
+   // step 3: Append the changed data from the current page( offset - nxtOffset )
    readSize = filesize(dataFile);
    modStream = fopen(dataFile, "r");
-   copyStream(0L, modStream, readSize, stream );
+   copyStream(0L, modStream, readSize, stream, FALSE/*Actual Changes from APP*/ );
    fclose(modStream);
    curpos = ftell(stream);
    *newOffset = curpos;
 
-   // step 4: Append the rest of the unbuffered data
+   // step 4: Append the rest of the unvisited pages( nxtOffset )
    if(nxtOffset < totalSize){
-      copyStream(nxtOffset, duplStream, totalSize, stream );
+     copyStream(nxtOffset, duplStream, totalSize, stream, TRUE/* schema check*/  );
    }
-   
-   // step 5: Correct the offsets that are modified by header changes
-   if( headDiff != 0 )
-     for(i=0; i< 12; i++) 
-	   if( di.offsets[i] > 0 )
-	     di.offsets[i] += headDiff; // correcting...
 
    fclose(duplStream);
    fclose(stream);

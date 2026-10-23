@@ -234,7 +234,6 @@ void loadPage(int prevNext /*-1 is prev, +1 is next, 0 curr*/)
 {
   if(changed){
     changed = FALSE;
-    writet(1, 25, WHITE, MSGSAVING);
     savepage();
   }
   clearsheet(TRUE/*same file*/);
@@ -684,6 +683,13 @@ void deletecol(int col)
    updateoflags(col, row, NOUPDATE);
   }
  }
+ #if HEADERROW == 1
+ if (col != MAXCOLS - 1) movmem(&hcell[col + 1], &hcell[col], sizeof(CELLPTR) * (MAXCOLS - col - 1));
+ setmem(&hcell[MAXCOLS - 1], sizeof(CELLPTR), 0);
+ for (counter = 0; counter <= lastcol; counter++) updateoflags(col, -1, NOUPDATE);
+ #endif
+ if(isPagePresent(0)) deleteCSVCol(col);
+
  while (col <= rightcol)
   displaycol(col++, NOUPDATE);
  changed = TRUE;
@@ -697,6 +703,10 @@ void insertcol(int col)
 
  if (lastcol == MAXCOLS - 1)
  {
+  #if HEADERROW == 1
+  deletecell(lastcol, -1*HEADERROW, NOUPDATE);
+  #endif
+
   for (counter = 0; counter <= lastrow; counter++)
    deletecell(lastcol, counter, NOUPDATE);
   printfreemem();
@@ -729,6 +739,13 @@ void insertcol(int col)
    updateoflags(col, row, NOUPDATE);
   }
  }
+ #if HEADERROW == 1
+ if (col != MAXCOLS - 1) movmem(&hcell[col], &hcell[col + 1], sizeof(CELLPTR) * (MAXCOLS - col - 1));
+ setmem(&hcell[col], sizeof(CELLPTR), 0);
+ for (counter = 0; counter <= lastcol; counter++) updateoflags(col, -1, NOUPDATE);
+ #endif
+ if(isPagePresent(0)) insertCSVCol(col);
+
  while (col <= rightcol)
   displaycol(col++, NOUPDATE);
  changed = TRUE;
@@ -792,7 +809,6 @@ void insertrow(int row)
  
  if (lastrow == MAXROWS - 1)
  {
-  if(changed) savepage(); // Make sure all the data saved.
   borrowLine(-1);
 
   for (counter = 0; counter <= lastcol; counter++)
@@ -878,13 +894,15 @@ void fmenu(void)
 void cmenu(void)
 /* Executes the commands in the column menu */
 {
+ int ans;
  switch(getcommand(CMENU, CCOMMAND))
  {
   case 0 :
    insertcol(curcol);
    break;
   case 1 :
-   deletecol(curcol);
+   if (getyesno(&ans, MSGAREUSURE) && (ans == 'Y'))
+    deletecol(curcol);
    break;
   case 2 :
    setcolwidth(curcol);
@@ -898,13 +916,15 @@ void cmenu(void)
 void rmenu(void)
 /* Executes the commands in the row menu */
 {
+ int ans;
  switch(getcommand(RMENU, RCOMMAND))
  {
   case 0 :
    insertrow(currow);
    break;
   case 1 :
-   deleterow(currow);
+   if (getyesno(&ans, MSGAREUSURE) && (ans == 'Y'))
+    deleterow(currow);
    break;
  } /* switch */
 } /* rmenu */
@@ -949,6 +969,12 @@ void mainmenu(void)
    stop = TRUE;
    break;
  } /* switch */
+
+ if(changed && saveRequired) {
+   savepage();
+   changed = FALSE;
+   saveRequired = FALSE;
+ }
 } /* mainmenu */
 
 

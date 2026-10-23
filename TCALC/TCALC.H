@@ -1,5 +1,5 @@
 /* Turbo C++ - (C) Copyright 1987-1991 by Borland International */
-
+#include <stdio.h>
 #define S_IREAD	 0x0100	/* from SYS\STAT.H */
 #define S_IWRITE 0x0080	/* from SYS\STAT.H */
 
@@ -45,6 +45,7 @@
 #define MSGSAVING "Saving..."
 #define MSGSAVED "The file is saved successfully!"
 #define MSGSAVESHEET "Save current spreadsheet?"
+#define MSGAREUSURE "Are you sure?"
 #define MSGSTACKERROR "Parser stack overflow."
 
 #define MENU "Spreadsheet, Col, Row, Utility, Quit"
@@ -74,9 +75,8 @@
 #define MAXPLACES 8
 #define TOPMARGIN 4   /* Original is 3 */
 #define PARSERSTACKSIZE 20
-#define MEMPIT 50  /* Trailing space allocation */
+#define MINROWCHARS 10
 #define MAXROWCHARS 500
-#define MAXDIAGCHARS 500
 #define MAXVALCHARS 50
 
 #define TEXTCOLOR WHITE
@@ -144,7 +144,6 @@ struct DATAREADER
  long partialSize;
  long totalSize;
  int curPage;
- int hasNewRow;
  long offsets[12]; // For each 100 records
 };
 
@@ -268,6 +267,9 @@ void diagnostics(void);
 
 char* readentire(char* fileName);
 int validatecsvfile(char* fileName);
+void insertCSVCol(int col);
+void deleteCSVCol(int col);
+int modifyLines(char *tmp, long fromOff, long* curPos, FILE *stream );
 void borrowLine(int direction);
 void loadcsvfile(char* fileName, int);
 void savecsvfile(char* fileName, int inclHeader, char* headerCopy);
@@ -292,9 +294,10 @@ extern CELLPTR cell[MAXCOLS][MAXROWS], curcell, hcell[MAXCOLS];
 extern unsigned char format[MAXCOLS];
 extern unsigned char colwidth[MAXCOLS];
 extern unsigned char colstart[SCREENCOLS];
-extern unsigned char diagdata[MAXDIAGCHARS];
+extern unsigned char diagdata[MAXROWCHARS];
 extern char formdisplay;
 extern char changed;
+extern char saveRequired;
 extern char autocalc;
 extern int leftcol, rightcol, toprow, bottomrow, curcol, currow, lastcol,
  lastrow, atbottom, attop;

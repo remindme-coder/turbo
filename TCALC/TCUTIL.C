@@ -804,7 +804,7 @@ void trace(char* info){
       lastFewchars = &info[inx];
     }
 
-    if( (strlen(diagdata) + strlen(lastFewchars)) > MAXDIAGCHARS ) 
+    if( (strlen(diagdata) + strlen(lastFewchars)) > MAXROWCHARS ) 
       return; // cannot add trace anymore
     
     strcat( diagdata, "\n");
@@ -814,7 +814,7 @@ void trace(char* info){
 
 void diagnostics(void)
 {
- int ch;char *ptr, diagCopy[MAXDIAGCHARS];
+ int ch;char *ptr, diagCopy[MAXROWCHARS];
  long memdata = coreleft();
 
  writef(1, 24, LOWCOMMANDCOLOR, 79, "core memory available :%ld",  memdata  );
@@ -838,6 +838,13 @@ void diagnostics(void)
       ptr = strtok(NULL, "\n");
       ch = toupper(getkey());
    }
+   // Display the offset values if any
+   if( isPagePresent(0) )
+      writef(1, 24, LOWCOMMANDCOLOR, 79, "File:%s, offset(%ld,%ld)", di.fileName, di.offsets[di.curPage-1], di.offsets[di.curPage] );
+   else
+      writef(1, 24, LOWCOMMANDCOLOR, 79, "File:%s, offset(%ld,%ld) has no pages.", di.fileName );
+
+   ch = toupper(getkey());
    free(ptr);
   }
  }
