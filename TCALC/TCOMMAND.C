@@ -215,10 +215,12 @@ void clearsheet(int keepFile)
  if(!keepFile) 
  {
   // header
-  #if HEADERROW == 1 
   for (col = 0; col <= tmpCol; col++)
+  {
+  #if HEADERROW == 1 
    deletecell(col, -1*HEADERROW, NOUPDATE);
   #endif
+  }
   initvars();
   strcpy(sheetname, "");
  }
@@ -232,8 +234,8 @@ void clearsheet(int keepFile)
 
 void loadPage(int prevNext /*-1 is prev, +1 is next, 0 curr*/)
 {
+  int tmpCCol = curcol, tmpLCol = leftcol;
   if(changed){
-    changed = FALSE;
     savepage();
   }
   clearsheet(TRUE/*same file*/);
@@ -242,6 +244,8 @@ void loadPage(int prevNext /*-1 is prev, +1 is next, 0 curr*/)
   printfreemem();
  
   curcol = currow = 0;
+  leftcol = tmpLCol; 
+  curcol = tmpCCol; 
   setrightcol();
   //displayscreen(NOUPDATE);
   writet(1, 25, WHITE, "");
@@ -394,7 +398,7 @@ void savesheet(void)
  
  if( strstr( strupr(filename), ".CSV" ) ){
   if(isPagePresent(0)) savepage();
-  else  savecsvfile(filename, TRUE, NULL);
+  else  savecsvfile(filename, NULL);
  } else {
   if ((file = open(filename, O_RDWR | O_CREAT | O_TRUNC | O_BINARY,
    S_IREAD | S_IWRITE)) == -1)

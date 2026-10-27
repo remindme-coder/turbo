@@ -272,7 +272,7 @@ void deleteCSVCol(int col);
 int modifyLines(char *tmp, long fromOff, long* curPos, FILE *stream );
 void borrowLine(int direction);
 void loadcsvfile(char* fileName, int);
-void savecsvfile(char* fileName, int inclHeader, char* headerCopy);
+void savecsvfile(char* fileName, char* headerCopy);
 void savepage();
 char finddelimiter(char *sheetheader, int *count);
 void loadturbofile(int file);

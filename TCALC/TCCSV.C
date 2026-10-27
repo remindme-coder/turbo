@@ -684,8 +684,8 @@ void savepage()
    page = di.curPage;
 
    writet(1, 25, WHITE, MSGSAVING);
-   savecsvfile(tmp, FALSE, /*out*/headerStr);
-   logmsg("Header is %s\n", headerStr);
+   savecsvfile(tmp, /*out*/headerStr);
+   //logmsg("Header is %s\n", headerStr);
    writePartial(di.fileName, tmp , di.offsets[page-1], di.offsets[page], headerStr, &newOffset );
 
    di.offsets[page] = newOffset;
@@ -696,28 +696,38 @@ void savepage()
     if(colInserted > -1) colInserted = -1;
     columnChanged = FALSE;
    }
+
+   changed = FALSE;
+   saveRequired = FALSE;
    writet(1, 25, WHITE, "");
 }
 
 /* Saves the current spreadsheet */
-void savecsvfile(char* fileName, int inclHeader, char *headerCopy)
+void savecsvfile(char* fileName, char *headerCopy)
 {
   char record[MAXROWCHARS] ="",dataBuff[MAXVALCHARS] = "", delim[2]=";",finfo[15] = "", temp[15]="";
-  int col, row, overwrite, file;
+  int col, row, overwrite, isFirst= FALSE,isMulti= FALSE,st = 0;
   CELLPTR cellptr;
   FILE *stream;
   int rows = lastrow, cols = lastcol;
+
+  if(isPagePresent(0)) {
+   isMulti = TRUE;
+   isFirst = isFirstPage();
+  }
 
   // The delimiter character is identified
   strset(delim, delimiter);
 
   stream = fopen(fileName, "w+");
 
-  /* header */
-  strcpy(record , "");
-  for (col = 0; col <= cols; col++)
+  if( HEADERROW || isFirst || !isMulti )
   {
-    cellptr = hcell[col];
+   /* header */
+   strcpy(record , "");
+   for (col = 0; col <= cols; col++)
+   {
+    cellptr = (HEADERROW) ? hcell[col] : cell[col][0];
     if (cellptr != NULL)
     {
       strcpy(finfo,"");
@@ -751,13 +761,21 @@ void savecsvfile(char* fileName, int inclHeader, char *headerCopy)
       }
     }
     if(col < cols) strcat(record, delim);
+   }
+
+   strcat(record, "\n");
+   if(headerCopy != NULL) strcpy(headerCopy, record);
+
+   #if HEADERROW == 1 
+   st = 0;// Data row starts from Row 0
+   #else
+   fwrite(record, strlen(record), 1, stream);// First page or not Multi-paged
+   st = 1;// Data row starts from Row 1
+   #endif
   }
-  strcat(record, "\n");
-  if(headerCopy != NULL) strcpy(headerCopy, record);
-  if(inclHeader) fwrite(record, strlen(record), 1, stream);
 
   /* actual data */
-  for (row = 0; row <= rows; row++)
+  for (row = st; row <= rows; row++)
   {
    strcpy(record , "");
 

@@ -259,6 +259,13 @@ void lineAtPos(FILE *stream,long apprxPos, long totalSize, char* line, long* sta
    *endPos = tmpPos; // end of line position
 }
 
+int isFirstPage() {
+   return (isPagePresent(0) && di.curPage == 1);
+}
+int isLastPage() {
+   return (isPagePresent(0) && ((di.totalSize - di.offsets[di.curPage+1]) <= 3));
+}
+
 int isPagePresent(int prevNext) {
    //logmsg( "di.totalSize:%ld, di.curPage:%d, di.offsets[]:%ld\n", (long)di.totalSize, di.curPage, (long)di.offsets[di.curPage] );
    if(prevNext == 0) {
@@ -655,7 +662,7 @@ void writePartial(char* fileName,char* dataFile ,long offset, long nxtOffset, ch
    duplStream = fopen(duplFile, "r");
    
    // step 2.1: Write the changed header
-   if(di.offsets[0] > 0 ){
+   if(di.offsets[0] > 0 && HEADERROW){
      fwrite(header, sizeof(char), strlen(header), stream);
      curpos = ftell(stream);
    }
