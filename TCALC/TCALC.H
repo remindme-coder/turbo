@@ -54,8 +54,8 @@
 #define SCOMMAND "LSPC"
 #define FMENU "Money, Justify-left, Clear"
 #define FCOMMAND "MJC"
-#define CMENU "Insert, Delete, Width, Format"
-#define CCOMMAND "IDWF"
+#define CMENU "Insert, Delete, Sort, Width, Format"
+#define CCOMMAND "IDSWF"
 #define RMENU "Insert, Delete"
 #define RCOMMAND "ID"
 #define UMENU "Recalc, Formula display, Diagnostics"
@@ -109,6 +109,8 @@
 #define RIGHT 1
 #define UP 2
 #define DOWN 3
+#define ASC 0
+#define DESC 1
 #define TEXT 0
 #define VALUE 1
 #define FORMULA 2
@@ -264,12 +266,13 @@ void run(void);
 void gotocell(void);
 void trace(char* info);
 void diagnostics(void);
+void concatSpace(char* data,int wdth, int spaces, int dir);
 
 char* readentire(char* fileName);
 int validatecsvfile(char* fileName);
 void insertCSVCol(int col);
 void deleteCSVCol(int col);
-int modifyLines(char *tmp, long fromOff, long* curPos, FILE *stream );
+int modifyLines( char *tmp );
 void borrowLine(int direction);
 void loadcsvfile(char* fileName, int);
 void savecsvfile(char* fileName, char* headerCopy);
@@ -277,6 +280,7 @@ void savepage();
 char finddelimiter(char *sheetheader, int *count);
 void loadturbofile(int file);
 void saveturbofile(int file);
+void sortByField(char *fileName, int col);
 
 char* blankOut(char *buff, int len);
 char* trimdecimals(char *buff);
@@ -286,6 +290,8 @@ char* trimJunk(char *buff);
 char* trimCharsRight(char *buff, char *chars);
 char* trimJunkRight(char *buff);
 char* doubletostr(double fv);
+
+int* quickSort(char* arr, size_t typ,int direction, int length);
 
 #if !defined(MAIN)
 

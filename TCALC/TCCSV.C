@@ -6,10 +6,11 @@
 #include <mem.h>
 #include <conio.h>
 #include <string.h>
+#include <values.h>
 #include "tcalc.h"
 #include "tcfile.h"
 
-const char nmbers[12] = "0123456789.\0";
+const char nmbers[13] = " 0123456789.\0";
 const char spcl[30] = "-,.;|'\"?\\/[]<>!@#$%&*_+\0";
 const char delimitchars[3] = ",;|";
 const char quot = '"';
@@ -21,6 +22,47 @@ int columnChanged = FALSE;
 int colDeleted = -1;
 int colInserted = -1;
 
+void getField(char *line, char* field, int lineLength, int col) {
+  int start,end,quoted,pos = 0, colItr = 0, wdth = 0;
+  blankOut(field, 10);
+
+  while(pos < lineLength) {
+   start = pos;
+   end = pos;
+   quoted=FALSE;
+
+   // skip data without quotes
+   while( pos < lineLength && line[pos] != quot && line[pos] != delimiter && line[pos] != '\n' ) pos++;
+
+   if(pos < lineLength && line[pos] == quot) {
+    pos++;start = pos;quoted=TRUE;
+    // just surf the data
+    while( pos < lineLength && line[pos] != quot ) {pos++;end=pos;}
+    pos++;
+
+    // skip data without quotes
+    while( pos < lineLength && line[pos] != delimiter && line[pos] != '\n' ) pos++;
+   }
+
+   if(pos < lineLength) {
+    if(colItr == col){
+      if(!quoted) end = pos;
+      wdth = end - start;
+      wdth = (wdth > 10) ? 10 : wdth;
+      memcpy( field, &line[start], wdth );
+      concatSpace(field, wdth, 10-wdth, LEFT);
+      break;
+    }
+    if( line[pos] == delimiter) {
+      colItr++;pos++;
+    } else if (line[pos] == '\n') {
+      colItr = 0;
+      pos = 0;
+      break;
+    }
+   }
+  }
+}
 
 void deleteField(char *line, int length, int col) {
   int start,pos = 0, colItr = 0;
@@ -97,20 +139,12 @@ void insertField(char *line, int length, int col) {
   }
 }
 
-int modifyLines(char *tmp, long fromOff, long* curPos, FILE *stream ) {
+int modifyLines( char *tmp ) {
   char *ptrSt,*pencil,*ptr,ch[1];
-  long tmpPos = fromOff, newPos = 0L;
-  int length = strlen(tmp), tmpLen, linesFound = 0, lineI;
+  int length = strlen(tmp), tmpLen, lines;
 
   // Identification purpose check
   if( colDeleted < 0 && colInserted < 0 ) return length;
-
-  // Skip the last line if it occupies whole MAXROWCHARS
-  if( length > (MAXROWCHARS-(MAXROWS/2)) ){
-	while( !( isNewLn(tmp[length-1]) || isprint(tmp[length-1]) ) ) length--;
-    while( isNewLn(tmp[length-1]) ) length--;
-    while( isprint(tmp[length-1]) ) length--;
-  }
 
   // Extract Lines
   ptrSt = &tmp[0];
@@ -119,64 +153,28 @@ int modifyLines(char *tmp, long fromOff, long* curPos, FILE *stream ) {
 
   if(!ptr){
     length = strlen(tmp);
-    newPos = fromOff + length;
-    linesFound++;
 
     if(colInserted > -1)  insertField(tmp, length,  colInserted);
     else if(colDeleted > -1)  deleteField(tmp, length,  colDeleted);
+
+    length = strlen(tmp);
   } else {
-    while(ptr && (ptr - pencil) > 0 && (pencil - ptrSt < length) ){
-     tmpPos += ptr - pencil + 2;
-     ptr++;
-     pencil = ptr;
-     ptr = strchr(ptr, '\n');
-     linesFound++;
-    }
-
-    fseek(stream, tmpPos, SEEK_SET);
-    fread(ch,sizeof(char),1,stream);
-    while(isprint( ch[0]) && (tmpPos-1) > 0 ){
-     fseek(stream, --tmpPos, SEEK_SET);
-     fread(ch,sizeof(char),1,stream);
-    }
-
-    // The offset position is now identified
-    newPos = tmpPos+1;
-
-    // now lets apply schema modifications
+    // Apply schema modifications
     pencil = &tmp[0];
-    ptr = strchr(tmp, '\n');
-    lineI = 0;
+    tmpLen = strlen( pencil );
 
-    if(colInserted > -1){
-     // 1. Insert new column
-     while(ptr && (lineI < linesFound) ){
-       tmpLen = strlen( pencil );
-       insertField( pencil, tmpLen, colInserted);
+    while( pencil && tmpLen > 0 ){
+       if(colInserted > -1)  insertField( pencil, tmpLen, colInserted);
+       else if(colDeleted > -1)  deleteField( pencil, tmpLen, colDeleted);
+
        ptr = strchr(pencil, '\n');
-       while( isNewLn(ptr[0]) ) ptr++;
-
+       while( ptr && isNewLn(ptr[0]) ) ptr++;
+       lines++;
        pencil = ptr;
-       ptr = strchr(pencil, '\n');
-       lineI++;
-     }
-    } else if(colDeleted > -1){
-     // 2. Delete column
-     while(ptr && (lineI < linesFound) ){
        tmpLen = strlen( pencil );
-       deleteField( pencil, tmpLen, colDeleted);
-       ptr = strchr(pencil, '\n');
-       while( isNewLn(ptr[0]) ) ptr++;
-
-       pencil = ptr;
-       ptr = strchr(pencil, '\n');
-       lineI++;
-     }
     }
     length = (pencil-ptrSt);
   }
-
-  *curPos = newPos;
   return length;
 }
 
@@ -193,12 +191,13 @@ void deleteCSVCol(int col) {
 }
 
 int isnumeric(char *data){
-   int i=0;
-   if(!data || strlen(data) == 0) return 0;
+   int i=0, nu = FALSE;
+   if(!data || strlen(data) == 0) return FALSE;
    for( i=0; i<strlen(data); i++ ){
-      if(!strchr(nmbers, data[i])) return 0;
+      if(!strchr(nmbers, data[i])) return FALSE;
+      else if(data[i] != ' ') nu = TRUE;
    }
-   return 1;
+   return nu ? TRUE : FALSE;
 }
 int attribtype(char* data) {
    int i=0, hasspace=0, hasbrackets=0, hascolon=0, hasalnum=0, haspunc=0;
@@ -591,7 +590,7 @@ void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/
    int i=0, j, allocated, len;
    long totalSize = filesize(fileName), tempMem, gridMem, nxtOffset;
    char *ptr,*prevPtr,*temp, debug[25];
-   char record[MAXROWCHARS];
+   char record[MAXROWCHARS] = "";
    char* doc = NULL;
 
    if(totalSize > 3 * 1024 /* 3KB */ )
@@ -603,13 +602,15 @@ void loadcsvfile(char* fileName, int prevNext /*-1 is prev, +1 is next, 0 curr*/
    if(!doc || strlen(doc) == 0) return;
 
    tempMem = memleft ;
-   if(prevNext == 0){
+   if(prevNext == 0 && record != NULL && strlen(record) > 0 ){
       // Identify the delimiter from the sheet header
       delimiter = finddelimiter(record, &delimCount);
       findcolumformat(record);
-      logmsg( "column count : %d\n", delimCount+1);
+      //logmsg( "column count : %d, header: %s\n", delimCount+1, record);
 
+      #if HEADERROW == 1 
       allocated = loadcsheader(record);
+      #endif
    }
 
    ptr = doc;
@@ -813,3 +814,352 @@ void savecsvfile(char* fileName, char *headerCopy)
  fclose(stream);
 }
 
+int isColumnNumeric(char *bookPtr, int totalLines) {
+   int nu = TRUE, lineI = 0;
+   char field[10+1];
+
+   while( lineI < totalLines && lineI < 10) {
+     memcpy(field, bookPtr, 10 );
+     field[10] = 0;
+     bookPtr += 10;
+     lineI++;
+     if( !isnumeric(field) ) {
+      nu = FALSE;
+      break;
+     }
+   }
+
+   return nu;
+}
+
+int* getSortedLines(char* fileName, int col, int dir, int* typ, int* itemCount, int* lineSizes ) {
+   FILE *stream, *tmpStream;
+   int iter=0,dataItr,length = MAXROWCHARS, correction=0, tmpLen, linesFound = 0, totalLines, lineI, dataType, *locations;
+   long curPos, prevPos, tmpPos = 0L, newPos = 0L, tmpVal, *bookLPtr, treshold ;
+   char tmp[MAXROWCHARS+1], field[10+1];
+   char *ptrSt,*pencil,*ptr,*book,*bookPtr,ch[1],tmpFile[15]="tctmp.tmp";
+   long totalSize = filesize(fileName) ;
+
+   curPos = 0L;
+   stream = fopen(fileName,"r");
+   fseek(stream, curPos, SEEK_SET);
+   tmpStream = fopen(tmpFile, "w");
+   book = (char*)reusableFile();
+   treshold = (reusableFileMem() - MAXROWCHARS);
+   //blankOut(book, strlen(book));
+   bookPtr = book;
+   bookLPtr = (long*)book;
+   totalLines = 0;
+   dataItr = -1;// skip header
+
+   do {
+      blankOut(tmp,MAXROWCHARS);
+      length = MAXROWCHARS;
+      if( totalSize - curPos < MAXROWCHARS) {
+         length = totalSize - curPos;
+      }
+
+      fread(tmp,sizeof(char),length,stream);
+      tmp[length] = 0;
+      prevPos = curPos;
+      curPos = ftell(stream);
+
+      if(curPos >= totalSize) {
+         trim(tmp);
+         length = strlen(tmp);
+         correction = (curPos - totalSize);
+         length -= correction;
+         tmp[length] = 0;
+      }
+      if( length > MINROWCHARS ) {
+         length = strlen(tmp);
+         tmpPos = prevPos;
+         newPos = prevPos;
+         linesFound = 0;
+
+         // Skip the last line if it occupies whole MAXROWCHARS
+         if( length > (MAXROWCHARS-(MAXROWS/2)) ){
+          while( !( isNewLn(tmp[length-1]) || isprint(tmp[length-1]) ) ) length--;
+          while( isNewLn(tmp[length-1]) ) length--;
+          while( isprint(tmp[length-1]) ) length--;
+         }
+
+         // Extract Lines
+         ptrSt = &tmp[0];
+         pencil = ptrSt;
+         ptr = strchr(tmp, '\n');
+
+         if(!ptr){
+          if( length > MINROWCHARS ) {
+           tmpLen = strlen(tmp);
+
+           newPos = prevPos + tmpLen;
+           lineSizes[totalLines + linesFound] = tmpLen;
+           linesFound++;
+
+           getField( tmp, /*out*/field, tmpLen, col);
+           if(totalLines == 0 && lineI == 0 ) {
+            // skip as this is header
+           } else {
+            memcpy( bookPtr, field, 10);
+            bookPtr += 10;
+           }
+          }
+         } else {
+          while(ptr && (ptr - pencil) > 0 && (pencil - ptrSt < length) )
+          {
+           lineSizes[totalLines + linesFound] = (ptr - pencil + 2);
+           tmpPos += (ptr - pencil + 2);
+           ptr++;
+           pencil = ptr;
+           ptr = strchr(ptr, '\n');
+           linesFound++;
+          }
+
+          // now lets get the field data
+          prevPos = tmpPos;
+          tmpPos = offsetCorrection(stream, prevPos, totalSize);
+          newPos = tmpPos;
+          pencil = &tmp[0];
+          ptr = strchr(tmp, '\n');
+          lineI = 0;
+
+          while(ptr && (lineI < linesFound) ){
+           tmpLen = strlen( pencil );
+           getField( pencil, /*out*/field, tmpLen, col);
+
+           if(totalLines == 0 && lineI == 0 ) {
+            // skip as this is header
+           } else {
+            memcpy( bookPtr, field, 10);
+            bookPtr += 10;
+           }
+
+           ptr = strchr(pencil, '\n');
+           while( isNewLn(ptr[0]) ) ptr++;
+
+           pencil = ptr;
+           ptr = strchr(pencil, '\n');
+           lineI++;
+          }
+         }
+
+         curPos = newPos;
+         dataItr += linesFound;
+         totalLines += linesFound;
+      }
+
+      // Dump the data to a temp file if it exceeds bookSZ
+      if( (dataItr * 10) > treshold ) {
+         fwrite(book, sizeof(char), dataItr * 10, tmpStream);
+         bookPtr = book;
+         dataItr = 0;
+      }
+
+      iter++;
+   } while( (totalSize - curPos) > 3 && iter < 1000 ); // Adjustment
+
+   // Dump the last iteration
+   newPos = ftell( tmpStream );
+   if( (dataItr * 10) <= treshold && newPos > 0L ){
+     fwrite(book, sizeof(char), dataItr * 10, tmpStream);
+     dataItr = 0;
+   }
+   fclose(tmpStream);
+
+   bookPtr = book;
+   bookLPtr = (long*)book;
+   totalLines--; // skip Header as it is not captured
+
+   // Identify if the string data collected is actually numeric
+   if(newPos > 0L) {
+     // Deal with data in file
+     totalSize = filesize(tmpFile);
+     tmpStream = fopen(tmpFile, "r");
+     tmpLen = 100;
+     fread(tmp,sizeof(char), tmpLen, tmpStream);
+     tmp[tmpLen] = 0;
+     fseek(tmpStream, 0L, SEEK_SET);
+     dataType = isColumnNumeric(tmp, totalLines);
+     dataItr = 0;
+
+     if( dataType == VALUE ) {
+       do{
+         fread(tmp, sizeof(char), MAXROWCHARS , tmpStream);
+         curPos = ftell(tmpStream);
+         tmpLen = strlen( tmp );
+
+         for(iter = 0; iter < (tmpLen / 10); iter++ ){
+           memcpy( field, &tmp[iter*10], 10);
+           field[10]=0;
+           bookLPtr[dataItr] = atol( field );
+           dataItr++;
+         }
+       } while( (totalSize - curPos) > 3 );
+     } else {
+       do{
+         fread(tmp, sizeof(char), MAXROWCHARS , tmpStream);
+         curPos = ftell(tmpStream);
+         tmpLen = strlen( tmp );
+
+         for(iter = 0; iter < (tmpLen / 10); iter++ ){
+           memcpy( field, &tmp[iter*10], 10);
+           field[10]=0;
+           trim(field);
+
+           if(strlen(field) >=5)
+             memcpy( bookPtr + (dataItr*5), field, 5);
+           else {
+             concatSpace(field, strlen(field), 5-strlen(field), RIGHT);
+             memcpy( bookPtr + (dataItr*5), field, 5);
+           }
+           dataItr++;
+         }
+       } while( (totalSize - curPos) > 3 );
+     }
+
+     fclose(tmpStream);
+   } else {
+     // Deal with data in memory
+     tmpLen = 100;
+     memcpy(tmp, book, tmpLen);
+     tmp[tmpLen] = 0;
+     dataType = isColumnNumeric(tmp, totalLines);
+
+     if( dataType == VALUE ) {
+       for(iter = 0; iter < totalLines; iter++ ){
+         memcpy( field, bookPtr, 10);
+         field[10]=0;
+         bookPtr += 10;
+         bookLPtr[iter] = atol( field );
+       }
+     } else {
+       for(iter = 0; iter < totalLines; iter++ ){
+         memcpy( field, bookPtr + (iter*10), 10);
+         field[10]=0;
+         trim(field);
+
+         if(strlen(field) >=5)
+           memcpy( bookPtr + (iter*5), field, 5);
+         else {
+           concatSpace(field, strlen(field), 5-strlen(field), RIGHT);
+           memcpy( bookPtr + (iter*5), field, 5);
+         }
+       }
+     }
+   }
+
+   if( dataType == VALUE ) {
+     locations = quickSort((char*)bookLPtr, 4/*long*/, dir, totalLines);
+   } else {
+     locations = quickSort((char*)bookPtr, 1/*char*/, dir, totalLines);
+   }
+   *itemCount = totalLines;
+   *typ = dataType;
+
+   fclose(stream);
+
+   //Locations doesn't include header, so increment by 1
+   for(iter=0;iter<totalLines;iter++) locations[iter]++;
+   //logmsg("totalLines: %d, last line:(%d,%d) -----\n", totalLines, lineSizes[totalLines-1],lineSizes[totalLines]);
+
+   return locations;
+}
+
+void sortByField(char *fileName, int col) {
+   char tmp[501],*ret1,data[6],duplFile[15] = "tcdupl.tmp" ;
+   int typ,i,j,perc,sz,max=1000,*lnWdths,prevLoc, offI,loc, lineCount, *locations, pending = FALSE, offCP[5], thresCP = (MAXINT-MAXROWCHARS);
+   long curPos = 0L, *ret2,offBase,stOff,endOff, totalSize = filesize(fileName), *lnOffs;
+   FILE *duplStream,*stream = fopen(fileName,"r");
+
+   // 1.make a duplicate of actual file
+   duplStream = fopen(duplFile, "w");
+   copyStream(0L, stream, totalSize, duplStream, FALSE/*Only backup*/ );
+   fclose(stream);
+   fclose(duplStream);
+
+   // 2.get the sort order
+   lnWdths = (int*)malloc((max+1)*sizeof(int));
+   locations = getSortedLines(fileName, col, ASC, &typ, &sz , lnWdths);
+   if( sz < max ) {
+       lnWdths = (int*)realloc(lnWdths, (sz + 1)*sizeof(int));
+   }
+
+   // 3. form the offset checkpoint, which is useful for efficiently calculating offsets by linewidths
+   lineCount = sz + 1;// header
+   for(j=0;j<5;j++) offCP[j] = 0;
+   offI = 0;
+   offBase = 0L;
+   i = 0;
+   curPos = 0L;
+   while(offI < lineCount) {
+       if(offBase > thresCP) {
+         offCP[i] = (offI-1);
+         curPos += lnWdths[offCP[i]];
+         //logmsg("Checkpoint Location %d), location:%d, Offset: %d, Aggr:%ld-----\n", i, offCP[i] + 1, lnWdths[offCP[i]], curPos);
+         i++;
+         offBase = 0;
+       }
+       offBase +=lnWdths[offI];
+       lnWdths[offI] = offBase;
+       offI++;
+   }
+
+   // 4.sort the locations
+   duplStream = fopen(duplFile, "r");
+   stream = fopen(fileName,"w");
+   // First header
+   stOff = 0L;endOff = lnWdths[0];
+   //logmsg("%d)loc:%d,", 0, 0);
+   copyStream(stOff, duplStream, endOff, stream, FALSE );
+
+   prevLoc = -1;
+   endOff = 0L;
+   pending = FALSE;
+   perc = sz / 10;
+
+   // Body
+   for(i=0; i<sz; i++) {
+       loc = locations[i];
+
+       if( loc - prevLoc == 1 )	{
+         //printf("-");
+       } else {
+         if(pending){
+           //logmsg("Start:%ld, end:%ld \n", stOff, endOff);
+           copyStream(stOff, duplStream, endOff, stream, FALSE);
+           pending = FALSE;
+         }
+       }
+
+       // Identify the start and end offset for the record line
+       offBase = 0L;
+       for(j=0; (j<5 && offCP[j] > 0) ;j++){
+         if( offCP[j] < loc )
+           offBase += (long)lnWdths[offCP[j]];
+       }
+
+       curPos = (long)lnWdths[loc-1];
+       if(curPos <= thresCP) {
+         curPos += offBase;
+         endOff = (long)lnWdths[loc];
+         endOff += offBase;
+       }
+       else {
+         curPos = offBase;// start is at checkpoint
+         endOff = offBase + (long)lnWdths[loc];
+       }
+
+       if(!pending) stOff = curPos;
+       pending = TRUE;
+       prevLoc = loc;
+       if(i%perc == 0) {
+         //logmsg("%d%c complete\n", i/perc * 10, '%');
+       }
+   }
+
+   copyStream(stOff, duplStream, endOff, stream, FALSE );
+   fclose(stream);
+   fclose(duplStream);
+   free(lnWdths);
+}

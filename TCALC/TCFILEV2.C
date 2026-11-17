@@ -69,6 +69,12 @@ void writeDebugLog(char* data)
 long reusableFileMem() {
    return (book? bookSZ:0L);
 }
+char* reusableFile() {
+   if( reusableFileMem() <= 0L ){
+    book = (char*)calloc(bookSZ, sizeof(char));
+   }
+   return book;
+}
 
 long filesize(char* fileName)
 {
@@ -403,14 +409,17 @@ char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr
    if(!stream) return NULL;
    strcpy(book , NULL);
 
-   if(pageNo == 1 && offsetA == 0 && HEADERROW ) {
+   if(pageNo == 1 && offsetA == 0 ) {
     // Read the header first when at page 1
     lineAtPos(stream, 0, totalSize, header, &prevPos, &curPos);
+
+    #if HEADERROW == 1 
     offsetA = curPos;
     di.offsets[0] = curPos;
+    #endif
    }
 
-   logmsg("offset:(%ld,%ld), page:%d, size:(%ld/%ld)\n",offsetA, offsetB,pageNo, (long)readSize, (long)totalSize);
+   //logmsg("offset:(%ld,%ld), page:%d, size:(%ld/%ld)\n",offsetA, offsetB,pageNo, (long)readSize, (long)totalSize);
    prevPos = offsetA;
    fseek(stream, offsetA, SEEK_SET);
    fread(book,sizeof(char),readSize,stream);
@@ -517,8 +526,8 @@ char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr
    if(curPos-offsetA > dataSZ) xtraCh = (float)(curPos-offsetA-dataSZ)/(float)MAXROWS;
    else if(curPos == totalSize) xtraCh = 1; // default xtra char
 
-   logmsg("lines: %d, with data %d, max %d, Pos:%ld, book:%d chars\n", lines, dataSZ, allocSZ, curPos, strlen(book));
-   logmsg("Differences Pos:%d, Data:%d, xtraCh:%1.1f, xtraData:%d \n",  (int)(curPos-offsetA), dataSZ, (float)xtraCh, (int)xtraData);
+   //logmsg("lines: %d, with data %d, max %d, Pos:%ld, book:%d chars\n", lines, dataSZ, allocSZ, curPos, strlen(book));
+   //logmsg("Differences Pos:%d, Data:%d, xtraCh:%1.1f, xtraData:%d \n",  (int)(curPos-offsetA), dataSZ, (float)xtraCh, (int)xtraData);
 
    // 3. Reverse truncate lines added extra
    if(curPos < totalSize || lines > MAXROWS){
@@ -551,7 +560,7 @@ char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr
          xtraData += (int)(endPtr - lastPtr) + (int)ceil(tmpCalc);
       }
 
-      logmsg("lastPtr - endPtr : %d, xtraData : %d,curPos:%ld \n", (int)(endPtr - lastPtr), (int)xtraData, (long)curPos);
+      //logmsg("lastPtr - endPtr : %d, xtraData : %d,curPos:%ld \n", (int)(endPtr - lastPtr), (int)xtraData, (long)curPos);
       lineAtPos(stream, curPos - xtraData -3, totalSize, lastLine, &prevPos, &offsetB); // Adjustment : 3 char b4 for eol
       curPos = offsetB;
    } else {
@@ -581,7 +590,7 @@ char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr
    fclose(stream);
 
    // 4. Book keeping
-   logmsg( "page:%d, offset(%ld,%ld), book:%d chars\n", pageNo, offsetA, offsetB, strlen(book));
+   //logmsg( "page:%d, offset(%ld,%ld), book:%d chars\n", pageNo, offsetA, offsetB, strlen(book));
    di.partialSize = di.partialSize < dataSZ ? dataSZ : di.partialSize;
    di.offsets[pageNo - 1] = offsetA ;
    di.offsets[pageNo] = offsetB ;
@@ -592,7 +601,62 @@ char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr
    return book;
 }
 
+long offsetCorrection( FILE *stream, long tmpPos, long totalSize){
+   char ch[1];
+   if(totalSize - tmpPos <3 ) return tmpPos;//Adjustment`
+   fseek(stream, tmpPos, SEEK_SET);
+   fread(ch,sizeof(char),1,stream);
+   while(isprint( ch[0]) && (tmpPos-1) > 0 ){
+    fseek(stream, --tmpPos, SEEK_SET);
+    fread(ch,sizeof(char),1,stream);
+   }
+   return tmpPos+1;
+}
 
+int truncate(char *tmp, long fromOff, long* curPos, FILE *stream ) {
+  char *ptrSt,*pencil,*ptr,ch[1];
+  long tmpPos = fromOff, newPos = 0L;
+  int length = strlen(tmp), tmpLen, linesFound = 0, lineI;
+
+  // Extract Lines
+  ptrSt = &tmp[0];
+  pencil = ptrSt;
+  ptr = strchr(tmp, '\n');
+
+  if(!ptr){
+    length = strlen(tmp);
+    newPos = fromOff + length;
+    linesFound++;
+  } else {
+    // Skip the last line if it occupies whole MAXROWCHARS
+    if( length > (MAXROWCHARS-(MAXROWS/2)) ){
+      while( !( isNewLn(tmp[length-1]) || isprint(tmp[length-1]) ) ) length--;
+      while( isNewLn(tmp[length-1]) ) length--;
+      while( isprint(tmp[length-1]) ) length--;
+    }
+
+    while(ptr && (ptr - pencil) > 0 && (pencil - ptrSt < length) ){
+     tmpPos += ptr - pencil + 2;
+     ptr++;
+     pencil = ptr;
+     ptr = strchr(ptr, '\n');
+     linesFound++;
+    }
+
+    fseek(stream, tmpPos, SEEK_SET);
+    fread(ch,sizeof(char),1,stream);
+    while(isprint( ch[0]) && (tmpPos-1) > 0 ){
+     fseek(stream, --tmpPos, SEEK_SET);
+     fread(ch,sizeof(char),1,stream);
+    }
+
+    // The offset position is now identified
+    newPos = tmpPos+1;
+  }
+
+  *curPos = newPos;
+  return length;
+}
 
 void copyStream(long fromOff, FILE *fromStre, long fromMax, FILE *to, int checkState ) {
    int iter=0,origLen,length = MAXROWCHARS, correction=0;
@@ -620,8 +684,14 @@ void copyStream(long fromOff, FILE *fromStre, long fromMax, FILE *to, int checkS
          length -= correction;
          tmp[length] = 0;
       }
+      // no extra characters, only a complete line considered
+      length = truncate(/*out*/tmp, prevPos, /*out*/&curpos, fromStre);
       if( checkState && length > MINROWCHARS ) {
-         length = modifyLines(/*out*/tmp, prevPos, &curpos, fromStre);
+         // Schema modifications
+         origLen = length;
+         tmp[length] = 0;
+         length = modifyLines(/*out*/tmp);
+         logmsg("Actual:%d, Modified:%d ", origLen, length );
       }
 
       fwrite(tmp, sizeof(char), length, to);
@@ -631,7 +701,7 @@ void copyStream(long fromOff, FILE *fromStre, long fromMax, FILE *to, int checkS
    if(isprint(tmp[length-1]))
       fwrite("\n", sizeof(char), 1, to);
    
-   logmsg("offset(%ld,%ld), curpos:%ld, correction:%d, iter: %d\n", fromOff, fromMax, curpos, correction, iter);
+   //logmsg("offset(%ld,%ld), curpos:%ld, correction:%d, iter: %d\n", fromOff, fromMax, curpos, correction, iter);
 }
 
 
@@ -647,7 +717,7 @@ void writePartial(char* fileName,char* dataFile ,long offset, long nxtOffset, ch
       logmsg("File :%s, has 0 data\n", fileName);
       return;
    }
-   logmsg("origninal offset:%ld,file size:%ld\n", offset, totalSize);
+   //logmsg("origninal offset:%ld,file size:%ld\n", offset, totalSize);
    
    stream = fopen(fileName,"r");
    duplStream = fopen(duplFile, "w");

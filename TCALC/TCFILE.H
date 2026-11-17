@@ -10,3 +10,4 @@ char* readEntire(char* fileName, char* line);
 char* readPartial(char* fileName, int prevNext, char* line, long* nxtOffset  );
 char* readPartialOffset(char* fileName , int prevNext, long offset, long* nxtOffset);
 void writePartial(char* fileName,char* data ,long offset, long nxtOffset, char* line, long* newOffset /*New next offset*/);
+long offsetCorrection( FILE *stream, long tmpPos, long totalSize);

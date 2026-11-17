@@ -650,6 +650,39 @@ void formatcells(int type)
  changed = TRUE;
 } /* formatcells */
 
+void sortcol(int col)
+{
+ int tmpCCol = curcol, tmpLCol = leftcol;
+ char colStr[3];
+ 
+ if(changed){
+   savepage();
+ }
+ 
+ // Sort
+ colstring(col, colStr);
+ writef(1, 24, LOWCOMMANDCOLOR, 79, "Sorting column %s ...", colStr);
+ sortByField(sheetname, col);
+ 
+ if(isPagePresent(0)) {
+   // Multi paged
+   di.curPage = 1;
+   loadPage(0);
+ } else {
+   // Single page
+   writet(1, 25, WHITE, MSGLOADING);
+   clearsheet(TRUE/*same file*/);
+   loadcsvfile(sheetname, 0);
+   curcol = currow = 0;
+   leftcol = tmpLCol; 
+   curcol = tmpCCol; 
+   setrightcol();
+   writet(1, 25, WHITE, "");
+   gotoxy(1, 25);
+ }
+ displayscreen(NOUPDATE);
+}
+
 void deletecol(int col)
 /* Deletes a column */
 {
@@ -909,9 +942,12 @@ void cmenu(void)
     deletecol(curcol);
    break;
   case 2 :
-   setcolwidth(curcol);
+   sortcol(curcol);
    break;
   case 3 :
+   setcolwidth(curcol);
+   break;
+  case 4 :
    fmenu();
    break;
  } /* switch */

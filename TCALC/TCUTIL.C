@@ -115,7 +115,7 @@ void printfreemem(void)
   gridM = reusableGridMem();
 
  memleft = coreM + fileM + gridM ;
- logmsg("coreM:%ld, fileM:%ld, gridM:%ld, total: %ld\n", coreM, fileM, gridM, memleft);
+ //logmsg("coreM:%ld, fileM:%ld, gridM:%ld, total: %ld\n", coreM, fileM, gridM, memleft);
  writef(strlen(MSGMEMORY) + 2, 1, MEMORYCOLOR, 6, "%6ld", memleft);
 } /* printfreemem */
 
@@ -723,7 +723,8 @@ char* trim(char *buff){
   // start forward
   length = strlen(buff);
   i = 0;
-  while( i<length && buff[i] == ' ' ) { i++;length--;  }
+  while( i<length && buff[i] == ' ' ) i++;
+  length -= i;
   movmem(&buff[i], &buff[0], length+1 );
 
   return buff;
@@ -772,6 +773,9 @@ void initvars(void)
  di.totalSize = 0;
  di.curPage = 0;
  di.offsets[1] = 0; 
+ di.offsets[0] = 0;
+
+ saveRequired = FALSE;
 } /* initvars */
 
 int getcommand(char *msgstr, char *comstr)
@@ -811,7 +815,6 @@ void trace(char* info){
     strcat( diagdata, lastFewchars) ;
   }
 }
-
 void diagnostics(void)
 {
  int ch;char *ptr, diagCopy[MAXROWCHARS];
@@ -851,5 +854,19 @@ void diagnostics(void)
 
  clearinput();
 } /* diagnostics */
+
+void concatSpace(char* data,int wdth, int spaces, int dir) {
+ int pos;
+ if(spaces > 0){
+  if(dir == LEFT) {
+      movmem( &data[0], &data[spaces], wdth );
+      for(pos=0;pos<spaces;pos++) data[pos] = ' ';
+  } else {
+      for(pos=0;pos<spaces;pos++) strcat( data, " " );
+  }
+  wdth += spaces;
+  data[wdth] = 0;
+ }
+}
 
 
