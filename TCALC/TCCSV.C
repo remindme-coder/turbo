@@ -412,11 +412,24 @@ void findcolumformat(char *sheetheader){
    }
 }
 
+int validOffset( FILE *stream, long tmpPos){
+   char ch[1];
+   long actual = tmpPos;
+   fseek(stream, tmpPos, SEEK_SET);
+   fread(ch,sizeof(char),1,stream);
+   while(isprint( ch[0]) && (tmpPos-1) > 0 ){
+    fseek(stream, --tmpPos, SEEK_SET);
+    fread(ch,sizeof(char),1,stream);
+   }
+   tmpPos++;
+   return (actual == tmpPos ? TRUE: FALSE);
+}
+
 int validatecsvfile(char* filename){
-   long buffSize = filesize(filename);
-   char *doc, *ptr, tmp[MAXROWCHARS], temp[25] ;
-   int i = 0,j=0, length, dcount[3], chcount[3], wdth=0, overflo=0;
-   //trace(NULL);
+   long curPos = 0L;
+   char *ptr, *pencil, tmp[MAXROWCHARS+1], temp[25] ;
+   int i = 0,j=0, length, dcount[3], chcount[3], wdth=0, overflo=FALSE /*, invRow = FALSE*/, invOff = FALSE;
+   FILE *stream;
 
    if( memleft < 2 * 1024 ) {
       //sprintf(temp,"Buff = %ld, MemLeft = %ld", buffSize, memleft);
@@ -425,59 +438,57 @@ int validatecsvfile(char* filename){
       return -1; // maximum file size limitation
    }
 	else {
-      doc = readSanity(filename, buffSize);
-      if(!strchr(doc,'\n')) { free(doc); return -1;} // maximum record size limitation
+      stream = fopen(filename,"r");
+      fread(tmp,sizeof(char),MAXROWCHARS,stream);
+      if(!strchr(tmp,'\n')) { fclose(stream); return -1;} // maximum record size limitation
    }
 
-   if(!doc || strlen(doc) == 0) { free(doc); return 1;} // no data, its a good file
-
-   ptr = strtok(doc, "\n");
+   pencil = tmp;
+   ptr = strchr(pencil, '\n');
 
    // Identify the column alignment for the first 3 rows
    delimiter = finddelimiter(ptr, &dcount[i]);
 
    // Header & 2 rows sanity check
    while (ptr != NULL && i < 3) {
-      length = strlen(ptr);
-      strcpy(tmp, ptr);
-      tmp[length] = '\0';
-      
-      insertspace(tmp);
-      length = strlen(tmp);
+      length = ptr - pencil;
+      curPos += length + 2;
+      if(!validOffset(stream, curPos)) invOff = TRUE;
       chcount[i] = length;
       dcount[i] = 0;
       wdth=0;
       j=0;
       while(j<length) {
-	      if(tmp[j] == delimiter ) { 
+         if(pencil[j] == delimiter ) {
             dcount[i]++; 
-            if(wdth > MAXCOLWIDTH) overflo = 1;
+            if(wdth > MAXCOLWIDTH) overflo = TRUE;
             wdth=0; 
          }
          else wdth++;
-	      j++;
+         j++;
       }
 
-      if(wdth > MAXCOLWIDTH) overflo = 1;
+      if(wdth > MAXCOLWIDTH) overflo = TRUE;
+      //if(length < MINROWCHARS) invRow = TRUE;
 
-      //sprintf(temp,"Row %d: len = %d, delim = %d",i,length, dcount[i]);
-      //trace( temp );
-      ptr = strtok(NULL, "\n");
+      pencil = ptr + 1;
+      ptr = strchr(pencil, '\n');
       i++;
    }
-   free(ptr);
-   free(doc);
+   fclose(stream);
 
    // Large text
    if(overflo) return -2; // Indicates data that are huge for TCALC
+   //if(invRow)  return -1; // Indicates low data for TCALC
+   if(invOff)  return 0; // Indicates invalid line endings
 
    // Validate column alignment
    if(dcount[0] == dcount[1] ) return 1; // header matches first record
    if(dcount[0] > 0 && chcount[1] == 0 && chcount[2] == 0  ) return 1; // header but no data, which is valid
 
    // Invalid cases
-   if( (dcount[0] > 0) && (abs(dcount[0] - dcount[1]) > 5) ) return -3; // header not marginally aligned to first record, invalid
-   if( (dcount[0] > 0) && dcount[1] == 0 && dcount[2] == 0 ) return -3; // header not aligned to first or second, invalid
+   if( (dcount[0] > 0) && (abs(dcount[0] - dcount[1]) > 3) ) return -3; // header not marginally aligned to first record, invalid
+   if( (dcount[0] > 0) && (dcount[1] != dcount[0] || dcount[2] != dcount[0]) ) return -3; // header not aligned to first or second, invalid
 
    // TODO: A few more can be added later...
 
@@ -842,7 +853,6 @@ int* getSortedLines(char* fileName, int col, int dir, int* typ, int* itemCount, 
 
    curPos = 0L;
    stream = fopen(fileName,"r");
-   fseek(stream, curPos, SEEK_SET);
    tmpStream = fopen(tmpFile, "w");
    book = (char*)reusableFile();
    treshold = (reusableFileMem() - MAXROWCHARS);
@@ -859,6 +869,7 @@ int* getSortedLines(char* fileName, int col, int dir, int* typ, int* itemCount, 
          length = totalSize - curPos;
       }
 
+      fseek(stream, curPos, SEEK_SET);
       fread(tmp,sizeof(char),length,stream);
       tmp[length] = 0;
       prevPos = curPos;
@@ -917,8 +928,6 @@ int* getSortedLines(char* fileName, int col, int dir, int* typ, int* itemCount, 
           }
 
           // now lets get the field data
-          prevPos = tmpPos;
-          tmpPos = offsetCorrection(stream, prevPos, totalSize);
           newPos = tmpPos;
           pencil = &tmp[0];
           ptr = strchr(tmp, '\n');

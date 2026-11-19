@@ -23,6 +23,7 @@
 #define MSGCOLWIDTH "Enter the new column width:"
 #define MSGNOOPEN "Can't open the file."
 #define MSGNOCREATE "Can't create the file, in the directory!"
+#define MSGIMPROPERCSV "Can't open the file with unknown line endings."
 #define MSGCURRUPT "Unable open the file. Please check data format!"
 #define MSGOVERWRITE "The file exists.  Do you want to overwrite it?"
 #define MSGFILELOMEM "Not enough memory for entire spreadsheet."

@@ -288,7 +288,8 @@ void loadsheet(char *filename)
     loadcsvfile(filename, 0);
   }
   else {
-    if(valid == -1)     errormsg(MSGFILELOMEM);
+    if(!valid)		errormsg(MSGIMPROPERCSV);
+    else if(valid == -1) errormsg(MSGFILELOMEM);
     else if (valid < -1) errormsg(MSGCURRUPT);
     return;
   }

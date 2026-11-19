@@ -95,7 +95,7 @@ void lineAtPos(FILE *stream,long apprxPos, long totalSize, char* line, long* sta
 {
    char tmp[MAXROWCHARS+1], ch[1], *ptr, *ptr2, *occur1, *occur2;
    int i,exact,left=0,right=0, lastI, range,pass, iter=0;
-   long orig = ftell(stream), tmpPos, beginPos,wall;
+   long orig, tmpPos, beginPos,wall;
    
    blankOut(tmp, MAXROWCHARS);
 
@@ -115,45 +115,31 @@ void lineAtPos(FILE *stream,long apprxPos, long totalSize, char* line, long* sta
          tmp[i] = 0;
       }
    }
-   else if( totalSize - (apprxPos+3) < 3 /* Adjustment */) {
+   else if( totalSize - apprxPos < 3 /* Adjustment */) {
       // The requested line is at the end of the file
       beginPos = totalSize - MAXROWCHARS;
+      tmpPos = beginPos;
       if( beginPos < 0) beginPos = 0;
       
       fseek(stream, beginPos  , SEEK_SET);
       fread(tmp,sizeof(char),MAXROWCHARS,stream);
-      trimJunk(tmp);
-      
-      lastI = i = strlen(tmp) - 1;
-      pass = 0;
-      while( i > 0 ) { 
-         if(isNewLn(tmp[i])) {
-            if( pass > 3) break; else pass=0; // Adjustment: A lne should have atleast 3 chars
-         } 
-         if(isprint(tmp[i])) {lastI = i; pass++;}
-         i--;
-      }
-      i = exact = lastI;
 
-      range = strlen(&tmp[lastI]);
-      tmpPos = (totalSize - range);
-      movmem(&tmp[lastI],&tmp[0], range );
-      tmp[range] = 0;
-      ptr = strchr(tmp,'\n');
-      if(ptr) ptr[0] = 0;
-      //logmsg("Temp pos is %ld, strlen:%d\n", tmpPos, range, tmp);
+      ptr2 = &tmp[0];
+      ptr = strchr(tmp, '\n');
 
-      // Correct tmpPos
-      pass=0;
-      tmpPos += 3;// Adjustment to identify correct start
-      fseek(stream, tmpPos, SEEK_SET);
-      fread(ch,sizeof(char),1,stream);
-      while(isprint( ch[0]) && (tmpPos-1) > 0 ){
-         fseek(stream, --tmpPos, SEEK_SET);
-         fread(ch,sizeof(char),1,stream);
-         pass = 1;
+      // surf and reach last line
+      while(ptr && (ptr - ptr2) > 0 && (apprxPos - tmpPos > 3) ){
+         i = ptr - ptr2 + 2;
+         tmpPos += i;
+         ptr++;
+         ptr2 = ptr;
+         ptr = strchr(ptr, '\n');
       }
-      if(pass) tmpPos++;
+
+      tmpPos = tmpPos - i;
+      ptr2 = (ptr2 - i) + 1;
+      movmem(ptr2,&tmp[0], i-2 );
+      tmp[i-2] = 0;
    } else {
       range = 10;
       
@@ -187,14 +173,7 @@ void lineAtPos(FILE *stream,long apprxPos, long totalSize, char* line, long* sta
             }
             
             if(i>=0) {
-               tmpPos += (occur1 - &tmp[0]);// beginning of line
-               
-               fseek(stream, tmpPos, SEEK_SET);
-               fread(ch,sizeof(char),1,stream);
-               while(ch[0] != occur1[1] /*start of line char*/ ){
-                  fseek(stream, ++tmpPos, SEEK_SET);
-                  fread(ch,sizeof(char),1,stream);
-               }
+               tmpPos += (occur1 - &tmp[0]) + 2;// beginning of line
                i = occur2-occur1;
                movmem(occur1,&tmp[0], i);
                tmp[i] = 0;
@@ -218,17 +197,7 @@ void lineAtPos(FILE *stream,long apprxPos, long totalSize, char* line, long* sta
             else if( exact > i ){
                // clearly we are at the beginning of the line
                right = 1;
-               
-               while(iscntrl( occur1[0])) occur1++;
-               i = occur1 - &tmp[0];
-               
-               tmpPos = tmpPos + i;// beginning of line
-               fseek(stream, tmpPos, SEEK_SET);
-               fread(ch,sizeof(char),1,stream);
-               while(ch[0] != occur1[0] ){
-                  fseek(stream, ++tmpPos, SEEK_SET);
-                  fread(ch,sizeof(char),1,stream);
-               }
+               tmpPos += occur1 - &tmp[0] + 2;// beginning of line
                wall = tmpPos;
             }
          }
@@ -238,7 +207,6 @@ void lineAtPos(FILE *stream,long apprxPos, long totalSize, char* line, long* sta
       } while( iter < 50 );
 
       trimJunk(tmp);
-      lastI = strlen(tmp) - 1;
    }
    
    if (line != NULL){
@@ -250,19 +218,7 @@ void lineAtPos(FILE *stream,long apprxPos, long totalSize, char* line, long* sta
    // Find the next line position
    i = strlen(tmp);
    *startPos = tmpPos; // start of line position
-   tmpPos += i;
-   //logmsg("Tmppos:%ld , TZ:%ld, orig:%ld\n", tmpPos, totalSize, orig);
-   if( tmpPos < totalSize ){
-      fseek(stream, tmpPos, SEEK_SET);
-      fread(ch,sizeof(char),1,stream);
-      while(iscntrl( ch[0]) && (tmpPos+1) < totalSize ){
-         fseek(stream, ++tmpPos, SEEK_SET);
-         fread(ch,sizeof(char),1,stream);
-      }
-   }
-
-   fseek(stream, orig, SEEK_SET);
-   *endPos = tmpPos; // end of line position
+   *endPos = tmpPos + i + 2; // end of line position
 }
 
 int isFirstPage() {
@@ -282,30 +238,6 @@ int isPagePresent(int prevNext) {
    else if(prevNext == -1) return di.curPage > 1;
    else if(prevNext == 1) return (di.totalSize - di.offsets[di.curPage]) > 3  ;
    return 0;
-}
-
-char* readSanity(char* filename, long totalSize) {
-   long curpos, length, i, readSize=0;
-   FILE *stream;char *docPtr;
-
-   i = 0;
-   while( totalSize > (MAXROWCHARS*(i+1)) && i < 3 ){
-      readSize += MAXROWCHARS; // consider top 3 rows
-      i++;
-   }
-
-   // only few chars left, so read them
-   if( (totalSize-readSize) < MAXROWCHARS ) readSize = totalSize;
-
-   docPtr = (char*)malloc(readSize);
-   logmsg("Sanity check mem PTR:%ld\n", (long)docPtr);
-   stream = fopen(filename,"r");
-   if(stream){
-      fread(docPtr,sizeof(char),readSize,stream);
-      fclose(stream);
-   }
-   
-   return docPtr;
 }
 
 char* readEntire(char* fileName, char *header){
@@ -601,19 +533,8 @@ char* readPartial(char* fileName , int prevNext /*-1 is prev, +1 is next, 0 curr
    return book;
 }
 
-long offsetCorrection( FILE *stream, long tmpPos, long totalSize){
-   char ch[1];
-   if(totalSize - tmpPos <3 ) return tmpPos;//Adjustment`
-   fseek(stream, tmpPos, SEEK_SET);
-   fread(ch,sizeof(char),1,stream);
-   while(isprint( ch[0]) && (tmpPos-1) > 0 ){
-    fseek(stream, --tmpPos, SEEK_SET);
-    fread(ch,sizeof(char),1,stream);
-   }
-   return tmpPos+1;
-}
 
-int truncate(char *tmp, long fromOff, long* curPos, FILE *stream ) {
+int truncate(char *tmp, long fromOff, long* curPos ) {
   char *ptrSt,*pencil,*ptr,ch[1];
   long tmpPos = fromOff, newPos = 0L;
   int length = strlen(tmp), tmpLen, linesFound = 0, lineI;
@@ -624,7 +545,6 @@ int truncate(char *tmp, long fromOff, long* curPos, FILE *stream ) {
   ptr = strchr(tmp, '\n');
 
   if(!ptr){
-    length = strlen(tmp);
     newPos = fromOff + length;
     linesFound++;
   } else {
@@ -643,15 +563,7 @@ int truncate(char *tmp, long fromOff, long* curPos, FILE *stream ) {
      linesFound++;
     }
 
-    fseek(stream, tmpPos, SEEK_SET);
-    fread(ch,sizeof(char),1,stream);
-    while(isprint( ch[0]) && (tmpPos-1) > 0 ){
-     fseek(stream, --tmpPos, SEEK_SET);
-     fread(ch,sizeof(char),1,stream);
-    }
-
-    // The offset position is now identified
-    newPos = tmpPos+1;
+    newPos = tmpPos;
   }
 
   *curPos = newPos;
@@ -664,7 +576,6 @@ void copyStream(long fromOff, FILE *fromStre, long fromMax, FILE *to, int checkS
    char tmp[MAXROWCHARS+1];
 
    curpos = fromOff;
-   fseek(fromStre, curpos, SEEK_SET);
 
    do{
       blankOut(tmp,MAXROWCHARS);
@@ -673,6 +584,7 @@ void copyStream(long fromOff, FILE *fromStre, long fromMax, FILE *to, int checkS
          length = fromMax - curpos;
       }
 
+      fseek(fromStre, curpos, SEEK_SET);
       fread(tmp,sizeof(char),length,fromStre);
       tmp[length] = 0;
       prevPos = curpos;
@@ -685,7 +597,7 @@ void copyStream(long fromOff, FILE *fromStre, long fromMax, FILE *to, int checkS
          tmp[length] = 0;
       }
       // no extra characters, only a complete line considered
-      length = truncate(/*out*/tmp, prevPos, /*out*/&curpos, fromStre);
+      length = truncate(/*out*/tmp, prevPos, /*out*/&curpos);
       if( checkState && length > MINROWCHARS ) {
          // Schema modifications
          origLen = length;
